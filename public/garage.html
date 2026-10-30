@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07090d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <title>BeamDash Garage</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow+Condensed:wght@600;700&display=swap">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    .carhead h1 { margin: 0; font-size: 30px; font-family: Rajdhani, sans-serif; }
+    .carhead p { margin: 2px 0 0; color: var(--dim); }
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 10px; margin-top: 14px; }
+    .stats div { background: var(--panel2); border-radius: 12px; padding: 10px; }
+    .stats b { display: block; font-size: 22px; font-family: Rajdhani, sans-serif; }
+    .stats small { color: var(--dim); }
+    .var { padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .var .top { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+    .var .top b { font-variant-numeric: tabular-nums; }
+    .var.changed .top span { color: var(--warn); }
+    .cat { margin: 16px 0 4px; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: var(--accent); font-weight: 700; }
+    .applybar { position: sticky; bottom: 0; background: var(--panel); padding: 10px 0 0; display: flex; gap: 8px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="grid">
+      <div class="card wide carhead">
+        <h1 id="carName">Waiting for car…</h1>
+        <p id="carConfig">Spawn or switch to a car in BeamNG — details load automatically.</p>
+        <div class="stats" id="stats"></div>
+      </div>
+
+      <div class="card"><h3>Quick actions</h3>
+        <div class="btns fill" style="margin-bottom:8px"><button class="btn" data-cmd="starter">Start engine</button><button class="btn" id="ignOff">Engine off</button></div>
+        <div class="btns fill" style="margin-bottom:8px"><button class="btn" data-cmd="repair">Repair / reset</button><button class="btn" data-cmd="refuel">Refuel / recharge</button></div>
+        <div class="btns fill" style="margin-bottom:8px"><button class="btn" id="pbrake">Parking brake</button><button class="btn" data-cmd="shiftDown">Shift −</button><button class="btn" data-cmd="shiftUp">Shift +</button></div>
+        <div class="btns fill"><button class="btn" data-cmd="getInfo">Reload car data</button></div>
+      </div>
+
+      <div class="card"><h3>World</h3>
+        <label class="row"><span>Time of day <b id="todVal"></b></span><input type="range" id="tod" min="0" max="24" step="0.25" style="max-width:180px"></label>
+        <div class="btns fill" style="margin-top:10px"><button class="btn" id="pause">Pause / resume</button></div>
+        <p class="muted" style="font-size:12px">Time and pause change the game for everyone in the session.</p>
+      </div>
+
+      <div class="card"><h3>Engine &amp; gearbox</h3><div class="kv" id="spec"></div></div>
+
+      <div class="card span2"><h3>Tuning <span class="pill" id="varCount"></span></h3>
+        <p class="muted" style="font-size:13px;margin-top:0">These are the car's own tuning variables (same as the in-game Tuning menu). Applying them respawns the car with the new setup.</p>
+        <input type="search" id="varSearch" placeholder="Filter (e.g. pressure, spring, gear)" style="margin-bottom:6px">
+        <div id="vars"></div>
+        <div class="applybar"><button class="btn primary" id="applyVars">Apply to car</button><button class="btn" id="resetVars">Undo changes</button><button class="btn" id="defaultVars">Factory defaults</button></div>
+      </div>
+      <div class="card"><h3>Gear ratios</h3><div class="kv" id="ratios"></div></div>
+
+      <div class="card wide"><h3>Drive assist · Cruise · ADAS</h3><div id="assist"></div></div>
+    </div>
+  </main>
+  <script src="/js/client.js"></script>
+  <script src="/js/assist.js"></script>
+  <script src="/js/garage.js"></script>
+</body>
+</html>

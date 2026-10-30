@@ -1,0 +1,3 @@
+# runtime data written by the server (trips, settings, deck layout)
+data/
+node_modules/

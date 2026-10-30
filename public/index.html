@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="BeamDash">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <link rel="apple-touch-icon" href="/icon.svg">
+  <title>BeamDash Cluster</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;500;600;700&family=Rajdhani:wght@500;600;700&family=Orbitron:wght@500;600;700&family=Bebas+Neue&display=swap">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="cluster">
+  <canvas id="stage"></canvas>
+  <div class="chips" id="chips"></div>
+  <div class="fcw" id="fcw"><b>BRAKE</b></div>
+  <div class="rotate-hint">Rotate your phone for the full cluster</div>
+
+  <div class="dock" id="dock">
+    <button class="btn" data-open="designs">Designs</button>
+    <button class="btn" data-open="custom">Customize</button>
+    <button class="btn" data-open="assist">Drive Assist</button>
+    <button class="btn" id="fsBtn">Fullscreen</button>
+    <button class="btn" id="hideBtn" title="Tap the cluster to bring the controls back">Hide</button>
+  </div>
+
+  <div class="scrim" id="scrim"></div>
+  <section class="sheet" id="sheet-designs">
+    <header><h2>Cluster designs</h2><button class="btn small" data-close>Done</button></header>
+    <div class="body" id="designList"></div>
+  </section>
+  <section class="sheet" id="sheet-custom">
+    <header><h2>Customize</h2><button class="btn small" data-close>Done</button></header>
+    <div class="body">
+      <div class="grid">
+        <div class="card"><h3 id="designOptsTitle">This design</h3><div id="designOpts"></div>
+          <div class="btns" style="margin-top:10px"><button class="btn small" id="resetOpts">Reset design colours</button></div></div>
+        <div class="card"><h3>Units</h3>
+          <label class="row"><span>Speed</span><select id="speedUnit"><option value="kmh">km/h</option><option value="mph">mph</option></select></label>
+          <label class="row"><span>Temperature</span><select id="tempUnit"><option value="C">°C</option><option value="F">°F</option></select></label>
+          <label class="row"><span>Pressure</span><select id="pressUnit"><option value="psi">psi</option><option value="bar">bar</option><option value="kpa">kPa</option></select></label>
+        </div>
+        <div class="card"><h3>Engine &amp; display</h3>
+          <label class="row"><span>Redline override (rpm, 0 = from car)</span><input type="number" id="redline" min="0" max="20000" step="100"></label>
+          <label class="row"><span>Shift light (rpm, 0 = auto)</span><input type="number" id="shiftRpm" min="0" max="20000" step="100"></label>
+          <label class="row"><span>Frame rate</span><select id="fps"><option value="60">60 fps</option><option value="30">30 fps (battery saver)</option></select></label>
+          <label class="row"><span>Brightness</span><input type="range" id="brightness" min="0.3" max="1" step="0.05" style="max-width:160px"></label>
+          <label class="row"><span>Sounds (indicators, warnings)</span><span class="switch"><input type="checkbox" id="sounds"><i></i></span></label>
+          <label class="row"><span>Assist chips on classic designs</span><span class="switch"><input type="checkbox" id="assistChips"><i></i></span></label>
+        </div>
+      </div>
+    </div>
+  </section>
+  <section class="sheet" id="sheet-assist">
+    <header><h2>Drive Assist · Cruise · ADAS</h2><button class="btn small" data-close>Done</button></header>
+    <div class="body" id="assistBody"></div>
+  </section>
+
+  <script src="/js/client.js"></script>
+  <script src="/js/gauges.js"></script>
+  <script src="/js/mapview.js"></script>
+  <script src="/js/designs.js"></script>
+  <script src="/js/assist.js"></script>
+  <script src="/js/cluster.js"></script>
+</body>
+</html>

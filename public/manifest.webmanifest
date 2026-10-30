@@ -1,0 +1,13 @@
+{
+  "name": "BeamDash",
+  "short_name": "BeamDash",
+  "description": "Live gauge cluster, telemetry and car control for BeamNG.drive",
+  "start_url": "/",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

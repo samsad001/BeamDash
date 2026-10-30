@@ -1,0 +1,50 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<title>BeamDash alpha 0.01 promo</title>
+<!-- Promo art for BeamDash alpha 0.01. Render with headless Chrome: ?v=banner at 1920x1080, ?v=designs at 1920x1248. -->
+<link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Inter:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; }
+  body { width: 1920px; background: #07090d; color: #e8edf5; font-family: Inter, system-ui, sans-serif; overflow: hidden; }
+  .view { display: none; } body.banner .banner, body.designs .designs { display: block; }
+  .banner { position: relative; height: 1080px; background:
+      radial-gradient(900px 600px at 78% 40%, rgba(255,106,31,.16), transparent 70%),
+      radial-gradient(700px 500px at 10% 90%, rgba(47,128,255,.14), transparent 70%), #07090d; }
+  .copy { position: absolute; left: 110px; top: 150px; width: 700px; }
+  .badge { display: inline-block; padding: 8px 18px; border: 1px solid rgba(255,138,61,.6); border-radius: 999px; color: #ff9a55; font: 600 22px Rajdhani; letter-spacing: 3px; text-transform: uppercase; }
+  h1 { font: 700 150px/1 Rajdhani; letter-spacing: -2px; margin: 26px 0 18px; }
+  h1 span { color: #ff7a2a; }
+  .tag { font-size: 32px; line-height: 1.35; color: #b8c2d3; }
+  .chips { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 44px; }
+  .chip { padding: 12px 20px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); font: 600 24px Rajdhani; letter-spacing: .5px; }
+  .foot { position: absolute; left: 110px; bottom: 70px; color: #6f7a8c; font-size: 20px; }
+  .stack { position: absolute; right: -40px; top: 120px; width: 1060px; height: 840px; perspective: 2200px; }
+  .stack img { position: absolute; width: 960px; border-radius: 22px; box-shadow: 0 40px 90px rgba(0,0,0,.7), 0 0 0 1px rgba(255,255,255,.08); transform: rotateY(-14deg); }
+  .stack img:nth-child(1) { top: 0; left: 60px; opacity: .55; }
+  .stack img:nth-child(2) { top: 270px; left: 20px; opacity: .8; }
+  .stack img:nth-child(3) { top: 540px; left: -20px; }
+  .phone { position: absolute; right: 70px; bottom: 60px; width: 230px; border-radius: 30px; border: 6px solid #1b1f27; box-shadow: 0 30px 70px rgba(0,0,0,.8); }
+  .designs { padding: 60px 70px 40px; height: 1248px; background: radial-gradient(1200px 500px at 50% 0, rgba(255,106,31,.12), transparent 70%), #07090d; }
+  .designs h2 { font: 700 64px Rajdhani; } .designs h2 small { font: 600 28px Rajdhani; color: #8a95a8; margin-left: 18px; letter-spacing: 1px; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 26px 26px; margin-top: 36px; }
+  .tile img { width: 100%; display: block; border-radius: 12px; box-shadow: 0 0 0 1px rgba(255,255,255,.08); }
+  .tile b { display: block; font: 700 24px Rajdhani; margin-top: 8px; } .tile i { font: 400 15px Inter; font-style: normal; color: #8a95a8; }
+</style></head>
+<body>
+  <section class="view banner">
+    <div class="copy">
+      <div class="badge">alpha 0.01 · open source</div>
+      <h1>Beam<span>Dash</span></h1>
+      <p class="tag">Live gauge clusters, telemetry and car control for BeamNG.drive, on your phone, tablet or second screen.</p>
+      <div class="chips"><span class="chip">16 cluster designs</span><span class="chip">Every car</span><span class="chip">Live telemetry</span><span class="chip">Tires &amp; brakes</span><span class="chip">Live map &amp; GPS</span><span class="chip">Cruise · ACC · ADAS</span><span class="chip">Garage &amp; tuning</span><span class="chip">Installable app</span></div>
+    </div>
+    <div class="stack"><img src="screenshots/cluster-bav86.png"><img src="screenshots/cluster-curve26.png"><img src="screenshots/cluster-rally98.png"></div>
+    
+    <div class="foot">Works with every car · Phone · iPad · Desktop · Free mod + tiny Node.js server</div>
+  </section>
+  <section class="view designs">
+    <h2>16 cluster designs<small>1970s → 2026 · US · Euro · Japan · Custom</small></h2>
+    <div class="grid"><div class="tile"><img src="screenshots/cluster-us70.png"><b>Detroit '70</b><i>1970s · US</i></div><div class="tile"><img src="screenshots/cluster-eu72.png"><b>Bavaria '72</b><i>1970s · Euro</i></div><div class="tile"><img src="screenshots/cluster-bav86.png"><b>Bavaria '86</b><i>1980s · Euro</i></div><div class="tile"><img src="screenshots/cluster-us84.png"><b>Digital '84</b><i>1980s · US</i></div><div class="tile"><img src="screenshots/cluster-bav95.png"><b>Bavaria M '98</b><i>1990s · Euro</i></div><div class="tile"><img src="screenshots/cluster-rally98.png"><b>Pleiades Rally '98</b><i>1990s · Japan</i></div><div class="tile"><img src="screenshots/cluster-optitron04.png"><b>Optitron '04</b><i>2000s · Japan</i></div><div class="tile"><img src="screenshots/cluster-bav06.png"><b>Bavaria '06</b><i>2000s · Euro</i></div><div class="tile"><img src="screenshots/cluster-pony05.png"><b>Retro Pony '05</b><i>2000s · US</i></div><div class="tile"><img src="screenshots/cluster-vette14.png"><b>Stingray '14</b><i>2010s · US</i></div><div class="tile"><img src="screenshots/cluster-virtual16.png"><b>Euro Virtual '16</b><i>2010s · Euro</i></div><div class="tile"><img src="screenshots/cluster-bavLive22.png"><b>Bavaria Live '22</b><i>2020s · Euro</i></div><div class="tile"><img src="screenshots/cluster-curve26.png"><b>Bavaria Curved '26</b><i>2020s · Euro</i></div><div class="tile"><img src="screenshots/cluster-wrx22.png"><b>Pleiades '22</b><i>2020s · Japan</i></div><div class="tile"><img src="screenshots/cluster-race.png"><b>Motorsport Pro</b><i>Custom · Custom</i></div><div class="tile"><img src="screenshots/cluster-builder.png"><b>Custom Builder</b><i>Custom · Custom</i></div></div>
+  </section>
+  <script>document.body.className = new URLSearchParams(location.search).get('v') || 'banner';</script>
+</body></html>

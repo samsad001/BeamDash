@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07090d">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <title>BeamDash Telemetry</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    .hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 14px; align-items: end; }
+    .hero .big { font-family: Rajdhani, sans-serif; font-size: 52px; }
+    .inputs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .vbar { height: 90px; background: var(--panel2); border-radius: 8px; position: relative; overflow: hidden; }
+    .vbar i { position: absolute; left: 0; right: 0; bottom: 0; border-radius: 8px; }
+    .vbar b { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; font-size: 12px; z-index: 1; text-shadow: 0 1px 3px #000; }
+    .steer { height: 10px; background: var(--panel2); border-radius: 6px; position: relative; margin-top: 10px; }
+    .steer i { position: absolute; top: -3px; width: 6px; height: 16px; background: var(--accent); border-radius: 3px; left: 50%; }
+    .tires { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .tire { background: var(--panel2); border-radius: 12px; padding: 10px; border: 2px solid transparent; }
+    .tire h4 { margin: 0 0 6px; display: flex; justify-content: space-between; font-size: 15px; }
+    .tire .kv { font-size: 13px; }
+    .temps { display: flex; gap: 6px; margin: 6px 0; }
+    .temps div { flex: 1; border-radius: 8px; padding: 6px; text-align: center; color: #000; font-weight: 700; font-size: 13px; }
+    .temps small { display: block; font-weight: 600; font-size: 10px; opacity: .75; }
+    canvas.chart { width: 100%; height: 200px; display: block; }
+    .legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--dim); margin-top: 6px; }
+    .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+    .lights { display: flex; flex-wrap: wrap; gap: 6px; }
+    details { border-bottom: 1px solid var(--line); padding: 6px 0; }
+    details summary { cursor: pointer; font-weight: 600; font-size: 14px; }
+    .search { display: flex; gap: 8px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="grid">
+      <div class="card wide">
+        <div class="hero">
+          <div><div class="muted">Speed</div><span class="big" id="hSpeed">0</span><span class="unit" id="hSpeedU"></span></div>
+          <div><div class="muted">RPM</div><span class="big" id="hRpm">0</span></div>
+          <div><div class="muted">Gear</div><span class="big" id="hGear">N</span></div>
+          <div><div class="muted">G-force</div><span class="big" id="hG">0.00</span><span class="unit">g</span></div>
+          <div class="inputs" style="grid-column: span 2">
+            <div class="vbar"><i id="iThr" style="background:#2bd46a"></i><b>THR</b></div>
+            <div class="vbar"><i id="iBrk" style="background:#ff3b30"></i><b>BRK</b></div>
+            <div class="vbar"><i id="iClu" style="background:#4aa3ff"></i><b>CLU</b></div>
+            <div class="vbar"><i id="iPb" style="background:#ffb000"></i><b>P-BRK</b></div>
+          </div>
+        </div>
+        <div class="steer"><i id="iSteer"></i></div>
+      </div>
+
+      <div class="card span2"><h3>Tires &amp; brakes <span class="pill" id="tireNote">live</span></h3>
+        <div class="tires" id="tires"></div>
+      </div>
+      <div class="card"><h3>Tire map</h3><canvas id="carTop" style="width:100%;height:260px"></canvas>
+        <div class="legend"><span>Wheel colour = brake surface temp</span></div></div>
+
+      <div class="card span2"><h3>Live chart (last 30 s)</h3><canvas class="chart" id="chart"></canvas>
+        <div class="legend"><span><i style="background:#4aa3ff"></i>Speed</span><span><i style="background:#ff8a00"></i>RPM</span><span><i style="background:#2bd46a"></i>Throttle</span><span><i style="background:#ff3b30"></i>Brake</span><span><i style="background:#c07aff"></i>Boost</span></div></div>
+      <div class="card"><h3>G-force</h3><canvas id="gm" style="width:100%;height:240px"></canvas>
+        <div class="kv"><span>Lateral</span><span id="gLat">0</span><span>Longitudinal</span><span id="gLon">0</span><span>Vertical</span><span id="gVert">0</span><span>Peak</span><span id="gPeak">0</span></div></div>
+
+      <div class="card"><h3>Engine</h3><div class="kv" id="engine"></div></div>
+      <div class="card"><h3>Fuel &amp; trip</h3><div class="kv" id="fuel"></div></div>
+      <div class="card"><h3>Position &amp; motion</h3><div class="kv" id="motion"></div></div>
+      <div class="card"><h3>Lights &amp; assists</h3><div class="lights" id="lights"></div>
+        <h3 style="margin-top:14px">ADAS</h3><div class="kv" id="adas"></div></div>
+      <div class="card"><h3>Vehicle</h3><div class="kv" id="vehicle"></div></div>
+      <div class="card"><h3>Traffic around you</h3><div class="scroll" style="max-height:260px"><table class="data" id="traffic"></table></div></div>
+
+      <div class="card span2"><h3>Powertrain devices</h3><div id="pt" class="scroll"></div></div>
+      <div class="card"><h3>Energy storage</h3><div id="energy"></div></div>
+
+      <div class="card wide"><h3>All live data <span class="pill" id="rawCount">0 values</span></h3>
+        <div class="search"><input type="search" id="rawSearch" placeholder="Filter (e.g. temp, wheel, signal)"><select id="rawSrc" style="max-width:200px"><option value="e">Electrics (all UI-app data)</option><option value="w">Wheels (raw)</option><option value="world">World / ADAS</option><option value="spec">Spec</option><option value="info">Car info</option></select></div>
+        <div class="scroll" style="max-height:520px"><table class="data" id="raw"></table></div>
+      </div>
+    </div>
+  </main>
+  <script src="/js/client.js"></script>
+  <script src="/js/gauges.js"></script>
+  <script src="/js/mapview.js"></script>
+  <script src="/js/telemetry.js"></script>
+</body>
+</html>
