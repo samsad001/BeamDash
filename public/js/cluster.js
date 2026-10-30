@@ -8,6 +8,11 @@
   const ctx = canvas.getContext('2d');
   const VW = 1600, VH = 600;
   let design = DESIGNS.find((x) => x.id === S.design) || DESIGNS[0];
+  // link straight to a look: /?design=bav86&page=trip&clean=1 (clean hides all controls, e.g. for screenshots or OBS)
+  const qp = new URLSearchParams(location.search);
+  if (qp.get('design')) design = DESIGNS.find((x) => x.id === qp.get('design')) || design;
+  if (qp.get('page')) MFD.goto(qp.get('page'));
+  if (qp.has('clean')) document.body.classList.add('clean');
 
   // ---------------------------------------------------------------- options
   function optsFor(def) {

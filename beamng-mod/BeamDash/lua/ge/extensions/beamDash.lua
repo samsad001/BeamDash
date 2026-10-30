@@ -267,14 +267,14 @@ local function updateAdas()
       if gap < desiredGap * 1.6 then
         want = math.min(adas.accSet, math.max(0, leadSpd + (gap - desiredGap) * 0.35))
       end
-      queueVeh(string.format("pcall(function() controller.getController('cruiseControl').setSpeed(%f) end)", want))
+      queueVeh(string.format("if beamDashVeh then beamDashVeh.cruiseSetSpeed(%f) end", want))
       adasState.accTarget = r(want, 2)
     end
   else
     adasState.lead = nil
     if aebBraking then aebBraking = false queueVeh("input.event('brake', 0, 2)") end
     if adas.acc and adas.accSet > 0 then
-      queueVeh(string.format("pcall(function() controller.getController('cruiseControl').setSpeed(%f) end)", adas.accSet))
+      queueVeh(string.format("if beamDashVeh then beamDashVeh.cruiseSetSpeed(%f) end", adas.accSet))
       adasState.accTarget = r(adas.accSet, 2)
     end
   end

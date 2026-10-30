@@ -3,7 +3,7 @@
 <p align="center"><b>Live gauge clusters, telemetry and car control for BeamNG.drive, on your phone, tablet or second screen.</b></p>
 
 <p align="center">
-  <a href="https://github.com/samsad001/BeamDash/releases"><img src="https://img.shields.io/badge/release-alpha%200.02-ff7a2a?style=for-the-badge" alt="Release alpha 0.02"></a>
+  <a href="https://github.com/samsad001/BeamDash/releases"><img src="https://img.shields.io/badge/release-alpha%200.03-ff7a2a?style=for-the-badge" alt="Release alpha 0.03"></a>
   <img src="https://img.shields.io/badge/BeamNG.drive-0.32%2B-2f80ff?style=for-the-badge" alt="BeamNG.drive 0.32+">
   <img src="https://img.shields.io/badge/Node.js-18%2B-3c873a?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js 18+">
   <img src="https://img.shields.io/badge/dependencies-0-8a95a8?style=for-the-badge" alt="Zero dependencies">
@@ -20,8 +20,8 @@
   <a href="CHANGELOG.md">Changelog</a>
 </p>
 
-> [!WARNING]
-> **Alpha 0.02.** Cruise control and adaptive cruise don't respond in-game in this release: the mod looks for a cruise *controller*, but BeamNG provides cruise as a vehicle *extension*. Everything else works. A fix is planned for the next release.
+> [!NOTE]
+> **Alpha 0.03.** Cruise control and adaptive cruise were rewritten in this release to use BeamNG's `cruiseControl` vehicle extension (0.01 and 0.02 couldn't control cruise at all). The fix hasn't been confirmed in-game across many cars yet, so please [report](https://github.com/samsad001/BeamDash/issues) how it behaves.
 
 ## ✨ Features
 
@@ -31,6 +31,7 @@
 - 🧮 **Trip computer**: Trip A, Trip B, Since start and a resettable fuel economy, kept on the server so every screen agrees. Hold OK to reset.
 - 🎚️ **Deck**: a Stream Deck-style button pad for a second phone, plus a **URL for every function** for Elgato Stream Deck, Companion, Touch Portal or keyboard shortcuts.
 - 🎵 **Now playing** from your PC (Linux, via playerctl), with album art and controls.
+- 🔗 **Link straight to a look**: `/?design=bav86&page=trip&clean=1` opens a design and page with all controls hidden, for OBS or a wall-mounted tablet.
 - 📊 **Live telemetry**: tire and brake temperatures, pressures, slip and load per wheel, engine and drivetrain, G-force, live charts, and every one of the ~200 values the game's UI apps can read.
 - 🗺️ **Live map**: the level's real road network with every vehicle and your GPS route. Tap to navigate and the route appears in the game too.
 - 🛡️ **Drive assist**: cruise control, adaptive cruise with 4 following distances, forward collision warning, emergency braking, blind-spot monitor, speed-limit signs, ESC and drive modes.
@@ -50,7 +51,7 @@
 
 ## 🚀 Quick start
 
-1. **Download** `BeamDash-alpha-0.02.zip` from the [Releases page](https://github.com/samsad001/BeamDash/releases) and unzip it anywhere.
+1. **Download** `BeamDash-alpha-0.03.zip` from the [Releases page](https://github.com/samsad001/BeamDash/releases) and unzip it anywhere.
 2. **Install the mod:** put `BeamDash-mod.zip` in your BeamNG `mods` folder, or run `bash install-mod.sh` (Linux) / `install-mod.ps1` (Windows). Don't put the whole download in `mods`.
 3. **Start the server:** `bash start-server.sh` (Linux) or `start-server.bat` (Windows). You need [Node.js](https://nodejs.org) 18 or newer.
 4. **Open the address it prints** (e.g. `http://192.168.1.20:8080`) on your phone, iPad or PC, and spawn a car in BeamNG.
@@ -239,6 +240,10 @@ BeamDash/
   server/trips.js           trip computer
   server/media.js           now playing (playerctl)
   data/                     saved trips, ADAS settings, Deck layout (created on first run)
+  docs/MOD_DESCRIPTION.md   mod page text for the BeamNG repository / forum (plain + BBCode)
+  docs/MOD_DOCUMENTATION.md full guide to the mod: install, network, data, commands, assists, troubleshooting
+  docs/TECHNICAL.md         technical write-up: architecture, protocols, algorithms, extending
+  media/                    stock images: banner, designs collage, screenshots/ (+ promo.html source)
   server/demo.js            demo car used when the game isn't connected
   public/                   the web app (cluster, telemetry, map, garage)
     js/designs.js           all cluster designs; add your own with reg({...})
@@ -247,7 +252,7 @@ BeamDash/
 
 ## 🧪 Status
 
-This is an early alpha. It has been tested live on native Linux (BeamNG.drive with LuaSocket): car data, telemetry, the road map and car info all stream correctly. Tuning, navigation, lights and drive-mode commands, and Windows in-game, still need wider testing. Bug reports are very welcome: please [open an issue](https://github.com/samsad001/BeamDash/issues) with your BeamNG version, OS and any console (`~`) lines that mention `beamDash`.
+This is an early alpha. It has been tested live on native Linux (BeamNG.drive with LuaSocket): car data, telemetry, the road map and car info all stream correctly. Tuning, navigation, lights and drive-mode commands, the new cruise-control code, and Windows in-game, still need wider testing. Bug reports are very welcome: please [open an issue](https://github.com/samsad001/BeamDash/issues) with your BeamNG version, OS and any console (`~`) lines that mention `beamDash`.
 
 ## 📄 License
 

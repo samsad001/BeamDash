@@ -1,4 +1,4 @@
-# BeamDash mod documentation (alpha 0.02)
+# BeamDash mod documentation (alpha 0.03)
 
 > What changed in each release: [`CHANGELOG.md`](../CHANGELOG.md).
 
@@ -98,7 +98,7 @@ All data is sent only to the BeamDash server you run. Nothing goes to the intern
 
 | Data | Rate | Source in the game |
 |---|---|---|
-| Speed, rpm, gear, pedals, steering, temperatures, boost, fuel, lights, assists, cruise, odometer | 30 Hz | vehicle electrics |
+| Speed, rpm, gear, pedals, steering, temperatures, boost, fuel, lights, assists, cruise, odometer | 30 Hz | vehicle electrics + cruise control |
 | G-forces, position, velocity, heading | 30 Hz | vehicle sensors / object |
 | Wheels: speed, slip, side slip, load, brake temps & torque, pressure, deflated / broken | 15 Hz | wheel rotators |
 | Every electrics value (~200) | 4 Hz | `electrics.values` |
@@ -129,8 +129,6 @@ Sent from the web app, the Deck, or a macro URL.
 | World | time of day, pause / resume |
 
 If a car lacks a feature (e.g. no drive modes), the command fails safely and the app shows a short message.
-
-> **Known issue in this build:** cruise control (and so adaptive cruise) does nothing in-game. The mod looks for a `cruiseControl` *controller*, but BeamNG provides cruise as a vehicle *extension*. A fix is planned for the next release. The mod is the same as in alpha 0.01.
 
 ---
 
@@ -164,7 +162,7 @@ In BeamNG: Options → Other → **OutGauge**. Turn it on with IP = the server's
 | Status stays **demo car** / **waiting for game** | Is the mod active in the Mod Manager? Does `settings/beamDash.json` exist? Any red `beamDash` lines in the console (`~`)? Is the mod folder layout right (see §1)? |
 | Works on the PC but not on the phone | Same Wi-Fi? Use the IP address the server prints. Is TCP 8080 open in the firewall? Some routers block devices on different Wi-Fi networks (VLANs / guest networks) from reaching each other. |
 | Server on another PC never connects | Started with `--game-host`? Is UDP 4446 open on the game PC and UDP 4445 on the server PC? |
-| Cruise does nothing | Known issue in this build (see §4). A fix is planned for the next release. |
+| Cruise does nothing | Does the car have cruise control in the game (the stock Cruise Control UI app works)? Check the console for `cruise` errors. |
 | Map is empty | Map & Nav → *Reload map*. Large levels take a few seconds. |
 | "LuaSocket unavailable" in the console | That BeamNG build doesn't include the network library the mod needs; please report it. |
 

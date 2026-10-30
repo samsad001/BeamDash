@@ -139,6 +139,7 @@ body.cluster.chrome-hidden .dock { transform: translateY(140%); }
 .wheel button.ok { background: rgba(74, 163, 255, .3); border-color: var(--accent); font-size: 15px; }
 .wheel button:active { transform: scale(.94); background: rgba(74, 163, 255, .5); }
 @media (max-height: 420px) { .wheel { gap: 4px; } .wheel button { width: 44px; height: 44px; } }
+body.clean .bd-nav, body.clean .dock, body.clean .wheel, body.clean .chips, body.clean .rotate-hint { display: none !important; }
 .rotate-hint { display: none; }
 @media (orientation: portrait) and (max-width: 700px) {
   .rotate-hint { display: block; position: fixed; left: 0; right: 0; bottom: 90px; text-align: center; color: var(--dim); font-size: 13px; z-index: 20; pointer-events: none; }

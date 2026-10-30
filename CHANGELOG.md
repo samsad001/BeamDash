@@ -4,6 +4,33 @@ Each release lists the changes to the **mod** (the Lua files inside BeamNG) and 
 
 ---
 
+## alpha 0.03 (2026-10-30)
+
+**Mod: changed. Reinstall it** (`BeamDash-mod.zip`, or copy the two `lua/…` files over an unpacked install, then restart BeamNG).
+
+### Mod
+- `beamDashVeh.lua`
+  - **Cruise control fixed.** It now uses BeamNG's `cruiseControl` vehicle *extension* (loading it if needed), and only falls back to a `cruiseControl` controller. In 0.01 and 0.02 the mod only looked for the controller, which cars don't have, so every cruise button did nothing.
+  - Cruise state (on/off and set speed) is read from the extension's `getConfiguration` and sent as `cruiseControlActive` / `cruiseControlTarget`, so the cluster shows the real set speed.
+  - *Resume* re-applies the last set speed (the extension can forget it when switched off).
+  - New `cruiseSetSpeed()` function the game-side extension calls.
+  - Clear error ("this car has no cruise control") when a car really has none.
+- `beamDash.lua`: adaptive cruise and *set speed* now go through `beamDashVeh.cruiseSetSpeed` instead of the controller.
+
+### Server
+- No changes.
+
+### Web app
+- Link straight to a look: `/?design=<id>&page=<page>&clean=1` (`clean` hides all controls, for screenshots, OBS or a kiosk tablet).
+- Pop-up info pages have a solid background, so gauge glow no longer shows through.
+- Trip computer table on Telemetry: number columns line up.
+
+### Docs and images (new)
+- `docs/MOD_DESCRIPTION.md` (repository / forum text, plain and BBCode), `docs/MOD_DOCUMENTATION.md` (install, network, data, commands, assists, troubleshooting, FAQ), `docs/TECHNICAL.md` (architecture, protocol, algorithms, APIs).
+- `media/`: banner, designs collage, `promo.html` source and screenshots of every design and page.
+
+---
+
 ## alpha 0.02 (2026-10-30)
 
 **Mod: no changes** (same Lua as 0.01, so no reinstall needed).
@@ -31,7 +58,7 @@ Each release lists the changes to the **mod** (the Lua files inside BeamNG) and 
 
 
 ### Known issues
-- Cruise control does nothing in-game (a fix is planned for the next release).
+- Cruise control does nothing in-game (fixed in 0.03).
 
 ---
 
@@ -67,5 +94,5 @@ Each release lists the changes to the **mod** (the Lua files inside BeamNG) and 
 - `start-server.bat` / `.sh`, `install-mod.ps1` / `.sh` (finds native, Proton or Flatpak installs) and `beamdash.service` (system unit), plus the README.
 
 ### Known issues
-- Cruise control (and adaptive cruise) does nothing in-game (a fix is planned for the next release).
+- Cruise control (and adaptive cruise) does nothing in-game (fixed in 0.03).
 - The mod only runs if `lua/` and `scripts/` sit directly in the mod folder. This was found in the first live test, when the whole project folder had been put in `mods`.

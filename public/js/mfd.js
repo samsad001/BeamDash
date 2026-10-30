@@ -277,6 +277,10 @@ window.MFD = (() => {
     c.save();
     c.globalAlpha = a;
     const r = area || { x: 490, y: 280, w: 620, h: 300 };
+    // solid backing so glowing gauge numbers don't show through the pop-up
+    c.fillStyle = '#000';
+    rrect(c, r.x, r.y, r.w, r.h, Math.min(r.w, r.h) * 0.06); c.fill();
+    c.strokeStyle = 'rgba(255,255,255,.12)'; c.lineWidth = 2; c.stroke();
     draw(c, d, r.x, r.y, r.w, r.h, th);
     c.restore();
   }

@@ -208,6 +208,14 @@ local function updateGFX(dt)
       local val = ev[k]
       if type(val) == "number" then e[k] = num(val) elseif val ~= nil then e[k] = val end
     end
+    -- cruise state straight from the cruise control extension (defined further down)
+    if M.cruiseState then
+      local cs = M.cruiseState()
+      if cs then
+        e.cruiseControlActive = cs.on and 1 or 0
+        e.cruiseControlTarget = num(cs.target)
+      end
+    end
     local msg = { t = "veh", e = e }
     pcall(function()
       msg.g = { num(sensors.gx2 or sensors.gx or 0), num(sensors.gy2 or sensors.gy or 0), num(sensors.gz2 or sensors.gz or 0) }
@@ -272,17 +280,56 @@ actions.refuel = function()
   end
 end
 actions.repair = function() obj:requestReset(RESET_PHYSICS) end
--- cruise control (speeds in m/s)
+-- cruise control (speeds in m/s).
+-- Stock BeamNG cruise control is the vehicle *extension* "cruiseControl" (what the in-game Cruise Control app uses);
+-- a few mods ship it as a controller instead, so try both.
+local function cruise()
+  local c = rawget(_G, "cruiseControl") or (extensions and extensions.cruiseControl)
+  if not c and extensions and extensions.load then
+    pcall(extensions.load, "cruiseControl")
+    c = rawget(_G, "cruiseControl") or extensions.cruiseControl
+  end
+  if not c then c = ctrl("cruiseControl") end
+  if not c or type(c.setSpeed) ~= "function" then error("this car has no cruise control") end
+  return c
+end
+local lastCruiseTarget = 0
 actions.cruiseOn = function(a)
-  local c = ctrl("cruiseControl")
+  local c = cruise()
   if a and a.speed then c.setSpeed(a.speed) else c.holdCurrentSpeed() end
+  if c.setEnabled then c.setEnabled(true) end
+end
+actions.cruiseOff = function() cruise().setEnabled(false) end
+actions.cruiseResume = function()
+  local c = cruise()
+  -- resume the last set speed (the extension may have been reset when it was switched off)
+  if lastCruiseTarget > 0 and c.setSpeed then c.setSpeed(lastCruiseTarget) end
   c.setEnabled(true)
 end
-actions.cruiseOff = function() ctrl("cruiseControl").setEnabled(false) end
-actions.cruiseResume = function() ctrl("cruiseControl").setEnabled(true) end
-actions.cruiseSet = function(a) ctrl("cruiseControl").setSpeed(a.speed) end
-actions.cruiseChange = function(a) ctrl("cruiseControl").changeSpeed(a.delta or 0) end
-actions.cruiseHold = function() ctrl("cruiseControl").holdCurrentSpeed() end
+actions.cruiseSet = function(a) cruise().setSpeed(a.speed) end
+actions.cruiseChange = function(a)
+  local c = cruise()
+  if c.changeSpeed then c.changeSpeed(a.delta or 0)
+  else c.setSpeed(math.max(0, lastCruiseTarget + (a.delta or 0))) end
+end
+actions.cruiseHold = function() cruise().holdCurrentSpeed() end
+
+-- the real cruise state, read from the extension (some cars don't put it in electrics)
+local function cruiseState()
+  local c = rawget(_G, "cruiseControl") or (extensions and extensions.cruiseControl)
+  if not c then
+    local ok, cc = pcall(controller.getController, "cruiseControl")
+    if ok then c = cc end
+  end
+  if not c or type(c.getConfiguration) ~= "function" then return nil end
+  local ok, cfg = pcall(c.getConfiguration)
+  if not ok or type(cfg) ~= "table" then return nil end
+  local target = cfg.targetSpeed or cfg.target or 0
+  if target > 0 then lastCruiseTarget = target end
+  return { on = cfg.isEnabled and true or false, target = target }
+end
+M.cruiseSetSpeed = function(speed) pcall(function() cruise().setSpeed(speed) end) end
+M.cruiseState = cruiseState
 -- stability / drive modes
 actions.escToggle = function()
   local c = ctrl("esc")

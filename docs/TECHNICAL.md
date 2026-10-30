@@ -1,4 +1,4 @@
-# BeamDash technical write-up (alpha 0.02)
+# BeamDash technical write-up (alpha 0.03)
 
 > What changed in each release: [`CHANGELOG.md`](../CHANGELOG.md).
 
@@ -63,7 +63,7 @@ Every datagram is one JSON object with a type field `t`. Messages from the vehic
 
 | `t` | From | Rate | Payload (main fields) |
 |---|---|---|---|
-| `veh` | vehicle | 30 Hz | `e` (~60 whitelisted electrics), `g` [gx, gy, gz] m/s², `pos`, `vel`, `dir` (vec3), every 2nd packet `wheels[]` |
+| `veh` | vehicle | 30 Hz | `e` (~60 whitelisted electrics, incl. cruise state), `g` [gx, gy, gz] m/s², `pos`, `vel`, `dir` (vec3), every 2nd packet `wheels[]` |
 | `electrics` | vehicle | 4 Hz | `e`: every scalar in `electrics.values` |
 | `pt` | vehicle | 4 Hz | `pt{name → device scalars + rpmOut}`, `energy{tank → scalars}`, `damage` |
 | `spec` | vehicle | 5 s | `engine{maxRPM, idleRPM, revLimiterRPM, maxPower, maxTorque, …}`, `gearbox{type, ratios}`, `controllers[]`, `driveMode`, `mass` |
@@ -229,7 +229,7 @@ ACC is a proportional gap controller on top of the game's own cruise control (wh
 | `playerInfo.firstPlayerSeated` | stream only the player's car | ✅ confirmed |
 | `map.objects`, `map.getMap()`, `map.findClosestRoad` | world, roads, limits | ✅ confirmed (road network received) |
 | `core_vehicles.getCurrentVehicleDetails`, `core_vehicle_manager.getPlayerVehicleData` | car info, tuning variables | ✅ confirmed |
-| `controller.getController('cruiseControl')` | cruise / ACC | ❌ not found in-game; cruise doesn't work (a fix is planned for the next release) |
+| `extensions.cruiseControl` (`setSpeed`, `changeSpeed`, `holdCurrentSpeed`, `setEnabled`, `getConfiguration`) | cruise / ACC | ⚠ patched to the extension API after the controller lookup failed in-game; to be confirmed |
 | `core_vehicle_partmgmt.setConfigVars` | apply tuning | to be confirmed in-game |
 | `core_groundMarkers.setPath` / `routePlanner.path` | GPS route | to be confirmed in-game |
 | `electrics.setLightsState`, `toggle_*_signal`, `toggle_warn_signal`, `toggle_fog_lights`, `horn` | lights | to be confirmed in-game |
@@ -294,6 +294,8 @@ It appears in the picker automatically (grouped by `era`) with a live thumbnail.
 
 **Add an MFD page:** add `{ id, name }` to `PAGES` and a renderer `R.<id>` (plus a `line()` case) in `mfd.js`.
 
+**Link to a specific look** (for OBS or a kiosk tablet): `/?design=<id>&page=<page>&clean=1`.
+
 ---
 
 ## 12. Testing
@@ -301,13 +303,13 @@ It appears in the picker automatically (grouped by `era`) with a live thumbnail.
 - **Demo mode** covers every page, every design and every action without the game.
 - A **fake-game UDP script** (sends `veh` / `world` packets and a chunked 6 000-node map, then listens on 4446) verified the demo → live hand-off, chunk reassembly and command forwarding.
 - Lua files are checked for block balance; the game itself is the final check (watch the `~` console for `beamDash` lines).
+- Stock images are captured from the demo server with headless Chrome over the DevTools protocol (the live SSE stream keeps pages "busy", so simple `--screenshot` never finishes).
 
 ---
 
 ## 13. Known limitations
 
-- Cruise control and adaptive cruise don't work in-game (a fix is planned for the next release).
-- Several command APIs (§7) are still to be confirmed in-game.
+- Several command APIs (§7) are still to be confirmed in-game. Cruise control was just switched to the extension API.
 - Tire *surface* temperature only appears if the BeamNG version exposes it; brake temperatures and pressures are always there.
 - Speed limits depend on the level's navigation data.
 - Range and consumption are estimates from fuel-volume changes; they settle after a few hundred metres.

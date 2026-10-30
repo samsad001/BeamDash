@@ -1,4 +1,4 @@
-# BeamDash alpha 0.02: mod page description
+# BeamDash alpha 0.03: mod page description
 
 Ready-to-paste text for the BeamNG.drive repository / forum. There's a plain version and a BBCode version (the forum uses BBCode).
 
@@ -8,7 +8,7 @@ Ready-to-paste text for the BeamNG.drive repository / forum. There's a plain ver
 
 ## Title
 
-**BeamDash: Live Gauge Clusters, Telemetry & Car Control on Your Phone (alpha 0.02)**
+**BeamDash: Live Gauge Clusters, Telemetry & Car Control on Your Phone (alpha 0.03)**
 
 ## Short description (one line)
 
@@ -64,7 +64,6 @@ BeamDash streams live data from BeamNG.drive to a web app you open on your phone
 Full guide: `docs/MOD_DOCUMENTATION.md` in the download.
 
 **Notes**
-- Alpha: cruise control doesn't respond in-game in this build. A fix is planned for the next release.
 - Cluster designs are original artwork *inspired by* the look of real cars of each era. BeamDash is not affiliated with or endorsed by any car maker.
 - The app only works on your local network. Don't expose its port to the internet.
 - No mod? The cluster also runs in basic mode from BeamNG's built-in OutGauge output.
@@ -72,7 +71,7 @@ Full guide: `docs/MOD_DOCUMENTATION.md` in the download.
 ## Full description (BBCode for the forum)
 
 ```bbcode
-[SIZE=6][B]BeamDash[/B] alpha 0.02 - Live Gauge Clusters, Telemetry & Car Control on Your Phone[/SIZE]
+[SIZE=6][B]BeamDash[/B] alpha 0.03 - Live Gauge Clusters, Telemetry & Car Control on Your Phone[/SIZE]
 
 Turn any [B]phone, tablet or second screen[/B] into a working instrument cluster for [B]every car[/B] in BeamNG.drive. Spawn a car and its details load automatically.
 
