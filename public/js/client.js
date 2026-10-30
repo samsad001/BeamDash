@@ -4,8 +4,9 @@ window.BD = (() => {
   const st = {
     e: {}, wheels: [], pt: null, energy: null, spec: null, info: null, vars: null, world: null, status: null,
     g: [0, 0, 9.81], pos: null, vel: null, dir: null, last: 0, damage: 0, connected: false,
-    media: null, mediaAt: 0, trips: null,
+    media: null, mediaAt: 0, trips: null, perf: null, perfAt: 0, fun: null, dmg: null,
   };
+  const VERSION = 'alpha 0.04';
   const listeners = {};
   const on = (type, fn) => ((listeners[type] = listeners[type] || []).push(fn), fn);
   const fire = (type, data) => (listeners[type] || []).forEach((f) => { try { f(data); } catch (err) { console.error(err); } });
@@ -14,6 +15,9 @@ window.BD = (() => {
   const DEFAULTS = {
     speedUnit: 'kmh', tempUnit: 'C', pressUnit: 'psi', distUnit: 'km', design: 'bav86', designOpts: {},
     sounds: true, assistChips: true, fps: 60, redline: 0, shiftRpm: 0, brightness: 1, wheelButtons: true, cruiseStep: 5,
+    // alerts & chimes (speeds in the display unit)
+    speedWarn: 0, limitWarn: true, limitTol: 5, lowFuelChime: true, shiftBeep: false, autoDim: true, voice: false,
+    portraitPage: 'trip', mfdOff: [],
     adas: { fcw: true, fcwSens: 2, aeb: false, bsm: true, tsr: true, accGap: 2 },
   };
   let settings;
@@ -77,6 +81,7 @@ window.BD = (() => {
     cons.lastOdo = odo; cons.lastFuel = fuel;
   }
 
+  let maxSeenKw = 0;
   function data() {
     const e = st.e, eng = (st.spec && st.spec.engine) || {};
     const maxRPM = settings.redline || eng.maxRPM || e.maxrpm || 7000;
@@ -87,7 +92,16 @@ window.BD = (() => {
     const w = st.world || {};
     const ad = w.adasState || {};
     const sigL = b(e.signal_L), sigR = b(e.signal_R);
+    const specE = (st.spec && st.spec.engine) || {};
+    const hasMotor = e.bd_hasMotor === true || specE.electric || specE.hybrid;
+    const hasEngine = e.bd_hasEngine === true || (e.bd_hasEngine === undefined && !specE.electric);
+    const engKw = e.bd_engPower || 0, motorKw = e.bd_motorPower || 0;
     return {
+      engKw, motorKw, powerKw: engKw + motorKw, engNm: e.bd_engTorque || 0,
+      isEV: !!hasMotor && !hasEngine, isHybrid: !!hasMotor && !!hasEngine,
+      battery: typeof e.bd_battery === 'number' ? e.bd_battery : null, batteryKwh: e.bd_batteryKwh ?? null, batteryCapKwh: e.bd_batteryCapKwh ?? null,
+      maxPowerKw: Math.max(60, specE.maxPower ? specE.maxPower * 0.7355 : 0, maxSeenKw = Math.max(maxSeenKw, engKw + Math.max(0, motorKw))),
+      watching: w.watched || null,
       speed: Math.abs(e.wheelspeed ?? e.airspeed ?? 0),
       rpm: e.rpmTacho ?? e.rpm ?? 0,
       maxRPM, tachMax, idleRPM: eng.idleRPM || e.idlerpm || 800,
@@ -173,7 +187,17 @@ window.BD = (() => {
     es = new EventSource('/api/stream');
     es.onopen = () => { st.connected = true; fire('connection', true); };
     es.onerror = () => { st.connected = false; fire('connection', false); };
+    // which car's live data we show: the one being watched (spectating) or the one you drive
+    const target = () => (st.world ? st.world.watched || st.world.myId : null);
+    const mine = (m) => m.vid === undefined || target() === null || target() === undefined || m.vid === target();
+    let lastTarget = null;
+    const retarget = () => {
+      const t = target();
+      if (t !== lastTarget) { lastTarget = t; st.e = {}; st.wheels = []; st.pt = null; st.dmg = null; maxSeenKw = 0; }
+    };
     handle('veh', (m) => {
+      retarget();
+      if (!mine(m)) return;
       Object.assign(st.e, m.e);
       if (m.g) st.g = m.g;
       if (m.pos) { st.pos = m.pos; st.vel = m.vel; st.dir = m.dir; }
@@ -181,9 +205,13 @@ window.BD = (() => {
       st.last = performance.now();
       updateConsumption(st.e);
     });
-    handle('electrics', (m) => Object.assign(st.e, m.e));
-    handle('pt', (m) => { st.pt = m.pt; st.energy = m.energy; if (typeof m.damage === 'number') st.damage = m.damage; });
-    handle('spec', (m) => { st.spec = m; });
+    handle('electrics', (m) => { if (mine(m)) Object.assign(st.e, m.e); });
+    handle('pt', (m) => { if (!mine(m)) return; st.pt = m.pt; st.energy = m.energy; if (typeof m.damage === 'number') st.damage = m.damage; });
+    handle('dmg', (m) => { if (mine(m)) st.dmg = m; });
+    handle('spec', (m) => { if (mine(m)) st.spec = m; });
+    handle('perf', (m) => { st.perf = m; st.perfAt = performance.now(); });
+    handle('fun', (m) => { st.fun = m; });
+    handle('toast', (m) => toast(m.text));
     handle('info', (m) => { st.info = m; cons.samples = []; cons.lastOdo = null; cons.value = 0; });
     handle('vars', (m) => { st.vars = m; });
     handle('world', (m) => {
@@ -276,17 +304,19 @@ window.BD = (() => {
   }
 
   function nav(active) {
-    const links = [['index', 'Cluster'], ['telemetry', 'Telemetry'], ['map', 'Map & Nav'], ['garage', 'Garage'], ['deck', 'Deck'], ['macros', 'Macros']];
+    const links = [['index', 'Cluster'], ['telemetry', 'Telemetry'], ['map', 'Map & Nav'], ['records', 'Records'], ['garage', 'Garage'], ['deck', 'Deck'], ['hud', 'HUD'], ['macros', 'Macros'], ['connect', 'Connect']];
     const el = document.createElement('nav');
     el.className = 'bd-nav';
-    el.innerHTML = `<a class="brand" href="/">BeamDash</a>` +
+    el.innerHTML = `<a class="brand" href="/">BeamDash <small class="ver">${VERSION}</small></a>` +
       links.map(([h, t]) => `<a href="/${h === 'index' ? '' : h}" class="${h === active ? 'on' : ''}">${t}</a>`).join('') +
       `<span class="bd-status" id="bdStatus"><i></i><b>connecting</b></span>`;
     document.body.prepend(el);
     const s = el.querySelector('#bdStatus');
     const upd = () => {
       const src = st.status ? st.status.src : 'none';
-      const label = !st.connected ? 'offline' : src === 'mod' ? 'BeamNG live' : src === 'outgauge' ? 'OutGauge' : src === 'demo' ? 'demo car' : 'waiting for game';
+      let label = !st.connected ? 'offline' : src === 'mod' ? 'BeamNG live' : src === 'outgauge' ? 'OutGauge' : src === 'demo' ? 'demo car' : 'waiting for game';
+      if (st.connected && st.world && st.world.watched) label += ` · watching #${st.world.watched}`;
+      if (st.status && st.status.recording) label = '● REC · ' + label;
       s.className = 'bd-status ' + (!st.connected ? 'off' : src);
       s.querySelector('b').textContent = label;
     };
@@ -298,7 +328,9 @@ window.BD = (() => {
 
   return {
     st, on, fire, connect, cmd, data, settings, save, U, clock, navNext, toast, nav, fmt, setAdas, pushAdas, b,
-    action, unitParams, duration, mediaNow, DEFAULT_KEYS,
+    action, unitParams, duration, mediaNow, DEFAULT_KEYS, VERSION,
+    // lap timer elapsed, advanced locally between 5 Hz updates
+    lapNow() { const p = st.perf && st.perf.lap; if (!p) return null; return p.running ? p.elapsed + (performance.now() - st.perfAt) / 1000 : p.elapsed; },
     get keys() { return keys; }, setKey(k, id) { if (id) keys[k] = id; else delete keys[k]; saveKeys(); },
     resetKeys() { keys = { ...DEFAULT_KEYS }; saveKeys(); }, pauseKeys(v) { keysPaused = v; },
   };

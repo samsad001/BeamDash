@@ -1,6 +1,6 @@
-# BeamDash technical write-up (alpha 0.03)
+# BeamDash technical write-up (alpha 0.04)
 
-> What changed in each release: [`CHANGELOG.md`](../CHANGELOG.md).
+What changed technically in 0.04: three new server modules (`perf.js`, `fun.js`, `recorder.js`), power / battery / damage data and "watched" streaming in the mod, per-vehicle routing in the server and client, 6 new info pages, portrait rendering, an alerts module, and HUD / OBS / Records / Connect pages. See §14 for the algorithms. The rest of this document is updated throughout.
 
 This document explains how BeamDash is built: the moving parts, the wire protocols, the algorithms behind the assists and the trip computer, and how to extend it. For installation and everyday use, see `MOD_DOCUMENTATION.md` and the README.
 
@@ -31,13 +31,16 @@ This document explains how BeamDash is built: the moving parts, the wire protoco
          ▼                            ▼          │
 ┌──────────────────── BeamDash server (Node) ──────────┐
 │ server.js   UDP in/out, chunk reassembly, cache, HTTP │
-│ trips.js    trip computer          actions.js  macros │
-│ media.js    playerctl (MPRIS)      demo.js  demo car  │
-│ data/       settings.json  trips.json  deck.json      │
+│ trips.js    trip computer + eco    actions.js  macros │
+│ perf.js     launch/brake + laps    fun.js  dyno/drift │
+│             timers                   crash/achievements│
+│ recorder.js CSV drive recorder     media.js playerctl │
+│ demo.js     demo car (hybrid)                         │
+│ data/  settings trips perf fun deck .json, recordings/ │
 └──────────┬──────────────────────────────▲─────────────┘
            │ Server-Sent Events           │ HTTP POST / GET
            ▼ (/api/stream)                │ (/api/cmd, /api/action/…)
-   Cluster · Telemetry · Map · Garage · Deck · Macros   (browsers)
+   Cluster · Telemetry · Map · Records · Garage · Deck · HUD/OBS · Macros · Connect
    Stream Deck · KDE shortcuts · curl · Companion       (macros)
 ```
 
@@ -63,13 +66,14 @@ Every datagram is one JSON object with a type field `t`. Messages from the vehic
 
 | `t` | From | Rate | Payload (main fields) |
 |---|---|---|---|
-| `veh` | vehicle | 30 Hz | `e` (~60 whitelisted electrics, incl. cruise state), `g` [gx, gy, gz] m/s², `pos`, `vel`, `dir` (vec3), every 2nd packet `wheels[]` |
+| `veh` | vehicle | 30 Hz | `e` (~60 whitelisted electrics, incl. cruise state, plus `bd_engPower`, `bd_engTorque`, `bd_motorPower` (− = regen), `bd_motorTorque`, `bd_hasEngine`, `bd_hasMotor`, `bd_battery`, `bd_batteryKwh`, `bd_batteryCapKwh`), `g` [gx, gy, gz] m/s², `pos`, `vel`, `dir` (vec3), every 2nd packet `wheels[]` |
+| `dmg` | vehicle | 2 Hz | `total`, `flags{group.name}`, `broken[]` (drivetrain devices), `wheels[]` {name, flat, broken}, `deform{group: 0..1}`, `engine{stalled, disabled}` |
 | `electrics` | vehicle | 4 Hz | `e`: every scalar in `electrics.values` |
 | `pt` | vehicle | 4 Hz | `pt{name → device scalars + rpmOut}`, `energy{tank → scalars}`, `damage` |
 | `spec` | vehicle | 5 s | `engine{maxRPM, idleRPM, revLimiterRPM, maxPower, maxTorque, …}`, `gearbox{type, ratios}`, `controllers[]`, `driveMode`, `mass` |
 | `info` | GE | on spawn / switch | `model` (Brand, Name, Years…), `config` (Configuration, Power, Torque, Weight, Drivetrain…), `jbeam` |
 | `vars` | GE | on spawn / switch | `vars{$name → {title, category, min, max, step, unit, default}}`, `values{$name → value}` |
-| `world` | GE | 10 Hz | `vehicles[]` {id, me, x, y, z, hx, hy, spd, dmg}, `route{pts[], len}`, `adas`, `adasState`, `speedLimit`, `tod`, `paused`, `level` |
+| `world` | GE | 10 Hz | `vehicles[]` {id, me, x, y, z, hx, hy, spd, dmg}, `route{pts[], len}`, `adas`, `adasState`, `speedLimit`, `tod`, `paused`, `level`, `watched` (vehicle id being spectated) |
 | `map` | GE | level load / request | `nodes[[x, y, z, radius]]`, `edges[[a, b, drivability, oneWay, speedLimit]]` |
 | `cmdResult` | either | per command | `id`, `type`, `ok`, `err` |
 | `hello` | GE | on load | `listenPort` |
@@ -80,7 +84,9 @@ Notes:
 - **Large messages** (the road network can be several hundred kB) are split into chunks: `BDC|<msgId>|<i>|<n>|<payload slice>`, 48 kB each, 2 per frame. The server reassembles by id, ignores duplicates, and expires partial messages after 30 s. Its receive buffer is raised to 16 MB because Windows' default dropped bursts in testing.
 
 ### Server → game (UDP 4446)
-Plain JSON commands: `{ "type": "...", ...args, "id": n }`. GE handles world-level commands itself (`hello`, `getInfo`, `getMap`, `setVars`, `navTo`, `navClear`, `adas`, `accOn`, `accSet`, `accOff`, `timeOfDay`, `pause`, `reset`). Everything else is forwarded to the vehicle VM's action table.
+Plain JSON commands: `{ "type": "...", ...args, "id": n }`. GE handles world-level commands itself (`hello`, `getInfo`, `getMap`, `setVars`, `navTo`, `navClear`, `adas`, `accOn`, `accSet`, `accOff`, `timeOfDay`, `pause`, `reset`, `watch`). Everything else is forwarded to the vehicle VM's action table.
+
+**Watching (spectating):** `watch {vid}` makes GE call `beamDashVeh.setWatched(true)` in that vehicle (and `false` in the previous one). `isActive()` in the vehicle VM is `watched or firstPlayerSeated`, so the watched car streams exactly like the player's. Its packets carry its own `vid`. The server compares it with `world.myId`: other cars' packets are forwarded to browsers but never touch the caches, trips, timers or recorder. Browsers show the car named by `world.watched`, else `world.myId`, and reset their live state when that target changes.
 
 The server re-sends `hello {needInfo, needMap}` every 3 s, which:
 1. lets a server on another machine be discovered: GE switches its `serverHost` to the sender's IP and tells the vehicle VM;
@@ -103,7 +109,10 @@ Live `veh` packets are forwarded to browsers **as the raw string they arrived as
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/stream` | GET | SSE stream. Events: `status`, `veh`, `electrics`, `pt`, `spec`, `info`, `vars`, `world`, `mapver`, `media`, `trips`, `ui`, `deck`, `cmdResult` |
+| `/api/stream` | GET | SSE stream. Events: `status`, `veh`, `electrics`, `pt`, `dmg`, `spec`, `info`, `vars`, `world`, `mapver`, `media`, `trips` (1 Hz), `perf` (5 Hz: launch + lap timer), `fun` (2 Hz: drift, dyno, crashes, achievements), `toast`, `ui`, `deck`, `cmdResult` |
+| `/api/info` | GET | version, port, hostname, LAN addresses (Connect page / QR codes) |
+| `/api/recordings` | GET | recorder state + list of CSV files |
+| `/api/recordings/<file>` | GET / DELETE | download (attachment) or delete one recording (plain file names only) |
 | `/api/cmd` | POST | raw command JSON → game (or demo) |
 | `/api/action/<id>` | GET / POST | named action (macros). Query: `step`, `unit`, `state=up` |
 | `/api/actions` | GET | list of all actions (id, label, group, hold) |
@@ -161,7 +170,10 @@ No framework, no bundler: one `<script>` per module, sharing a few globals.
 | `mapview.js` | road-network renderer + spatial grid |
 | `mfd.js` | the multi-function display: pages, OK / hold logic, line mode, pop-ups |
 | `designs.js` | the cluster designs (a registry of `{id, draw, opts, mfd}`) |
-| `cluster.js` | render loop, smoothing, needle sweep, design picker, customization, swipes and steering-wheel buttons, warnings, sounds |
+| `cluster.js` | render loop, smoothing, needle sweep, landscape / portrait layout, design picker, customization, swipes and steering-wheel buttons, warning banners |
+| `alerts.js` | Web Audio chimes, speed / limit / fuel / shift alerts, night dimming, spoken navigation (Web Speech API) |
+| `hud.js` | windscreen HUD (optionally mirrored) and the transparent OBS overlay |
+| `records.js` | performance, laps, drift, dyno chart, eco, recorder, achievements, crashes |
 | `telemetry.js`, `map.js`, `garage.js`, `deck.js`, `macros.js`, `assist.js` | the other pages |
 
 ### Normalization
@@ -174,7 +186,7 @@ No framework, no bundler: one `<script>` per module, sharing a few globals.
 - Static-looking parts (faces, ticks) are redrawn every frame. It keeps designs simple and fully dynamic (colours, units and redline can change live). Caching faces to an offscreen canvas is the obvious optimization if a slow device ever needs it.
 
 ### Multi-function display
-`MFD` holds the current page (persisted per device) and draws it into any rectangle with a theme (`bg, fg, dim, accent, font, line`), so the same 10 pages fit a tall TFT, a small centre screen, or a pop-up. Each design declares where its screen is:
+`MFD` holds the current page (persisted per device) and draws it into any rectangle with a theme (`bg, fg, dim, accent, font, line`), so the same 16 pages fit a tall TFT, a small centre screen, or a pop-up. Each design declares where its screen is:
 
 ```js
 mfd: (opts, data) => ({ x, y, w, h, theme }) // draw the pages here
@@ -230,6 +242,9 @@ ACC is a proportional gap controller on top of the game's own cruise control (wh
 | `map.objects`, `map.getMap()`, `map.findClosestRoad` | world, roads, limits | ✅ confirmed (road network received) |
 | `core_vehicles.getCurrentVehicleDetails`, `core_vehicle_manager.getPlayerVehicleData` | car info, tuning variables | ✅ confirmed |
 | `extensions.cruiseControl` (`setSpeed`, `changeSpeed`, `holdCurrentSpeed`, `setEnabled`, `getConfiguration`) | cruise / ACC | ⚠ patched to the extension API after the controller lookup failed in-game; to be confirmed |
+| `combustionEngine` / `electricMotor` device `outputTorque1`, `outputAV1`; storage `energyType == 'electricEnergy'`, `remainingRatio`, `storedEnergy` | power, regen, battery (0.04) | to be confirmed in-game |
+| `damageTracker` data, `beamstate.deformGroupDamage`, device `isBroken`, wheel `isBroken` / `isTireDeflated` | damage page (0.04) | to be confirmed in-game; every part is optional |
+| vehicle `queueLuaCommand('beamDashVeh.setWatched(true)')` on a non-player vehicle | watching (0.04) | to be confirmed in-game |
 | `core_vehicle_partmgmt.setConfigVars` | apply tuning | to be confirmed in-game |
 | `core_groundMarkers.setPath` / `routePlanner.path` | GPS route | to be confirmed in-game |
 | `electrics.setLightsState`, `toggle_*_signal`, `toggle_warn_signal`, `toggle_fog_lights`, `horn` | lights | to be confirmed in-game |
@@ -248,6 +263,9 @@ Every call that could be missing on some car or version is wrapped in `pcall`. A
 | `data/settings.json` (server) | ADAS settings (shared, restored when the game reconnects) |
 | `data/trips.json` (server) | trip counters |
 | `data/deck.json` (server) | Deck layout (pushed live to every Deck as `deck`) |
+| `data/perf.json` (server) | launch / braking last & best, lap lines + best lap (with its distance→time profile) + history, per level |
+| `data/fun.json` (server) | dyno curves per car (max 60 cars), drift best, crash log (20), achievements, lifetime / night distance |
+| `data/recordings/*.csv` (server) | drive recordings |
 | browser localStorage | per-screen choices: design, design colours, units, brightness, key bindings, current page, map theme |
 | `settings/beamDash.json` (BeamNG user folder) | mod network settings |
 
@@ -300,7 +318,7 @@ It appears in the picker automatically (grouped by `era`) with a live thumbnail.
 
 ## 12. Testing
 
-- **Demo mode** covers every page, every design and every action without the game.
+- **Demo mode** covers every page, every design and every action without the game. In 0.04 the demo car is a mild hybrid (motor assist, regen, a 1.6 kWh battery), carries a little damage, can be watched (traffic car streams), and stops fully on the parking brake, so the launch timer, lap timer, dyno, eco score, energy pages and recorder can all be exercised. Checked with it: 0-60 mph 2.81 s / 0-100 3.29 s / ⅛ mile 7.24 s from a standstill, a timed lap, 26 dyno bins, a 10 Hz CSV, watching car #1101 and back.
 - A **fake-game UDP script** (sends `veh` / `world` packets and a chunked 6 000-node map, then listens on 4446) verified the demo → live hand-off, chunk reassembly and command forwarding.
 - Lua files are checked for block balance; the game itself is the final check (watch the `~` console for `beamDash` lines).
 - Stock images are captured from the demo server with headless Chrome over the DevTools protocol (the live SSE stream keeps pages "busy", so simple `--screenshot` never finishes).
@@ -314,3 +332,63 @@ It appears in the picker automatically (grouped by `era`) with a live thumbnail.
 - Speed limits depend on the level's navigation data.
 - Range and consumption are estimates from fuel-volume changes; they settle after a few hundred metres.
 - No authentication (see §9).
+- (0.04) Power, battery, damage and watching use game fields that haven't been confirmed in-game yet (§7). The UI degrades gracefully when they're missing.
+- (0.04) Lap sectors are thirds of the best lap's *distance*, not fixed track points, so the first lap has no sectors.
+- (0.04) Drift angle uses the body heading vs. the velocity vector, so very slow manoeuvres (< 5 m/s) are ignored on purpose.
+
+---
+
+## 14. alpha 0.04 algorithms
+
+All of these run on the server from the 30 Hz `veh` stream of *your* car (never a watched car). `dt` is wall-clock time between packets; gaps over 1–2 s (pause, reconnect) reset the state instead of being integrated.
+
+### Launch timer (`perf.js`)
+```
+armed      : speed < 0.3 m/s for > 0.5 s                      → state READY
+start      : first packet with v ≥ 0.3 m/s; t0 interpolated to the 0.3 m/s crossing
+distance  += (v_prev + v) / 2 · dt                             (trapezoid rule)
+split time = linear interpolation of the crossing between two packets
+             (0-60 mph = 26.82 m/s, 0-100 = 27.78, 0-200 = 55.56; ⅛ mile 201.17 m, ¼ mile 402.34 m with trap speed)
+100-200    = t200 − t100
+end        : throttle < 30 % for 0.7 s, or v_max − v > 4 m/s, or braking, or 60 s
+best       = per split, lowest time (¼/⅛ compare the time, keep the trap speed)
+```
+**Braking:** a tracker starts when speed crosses down through 100 km/h (and separately 60 mph) with the brake > 30 %. It integrates distance until v < 0.3 m/s (result) or is dropped if the brake is released (< 5 %) for more than 0.5 s.
+
+### Lap timer (`perf.js`)
+- **Line:** a segment (x1, y1)–(x2, y2). From *my car* it's 30 m across the car's heading. From the map it's across the nearest road edge, half-width max(10 m, 1.8 × road radius).
+- **Crossing:** the car's path segment between two packets intersects the line (both orientation tests change sign). The line also stores the crossing *direction* (sign of the cross product), so driving through backwards doesn't count. Set at the car, the direction is taken from the car's heading; set on the map, it's learned from the first crossing.
+- **Lap:** time between crossings, only if > 150 m was driven (filters jitter on the line). Sector times are taken when the lap distance passes ⅓ and ⅔ of the *best lap's* distance.
+- **Gap to best:** each lap records elapsed time every 10 m (a profile). Gap = elapsed now − best profile[distance / 10]. That's the same idea as a real delta bar, sampled by distance rather than track position.
+- Stored per level: line, best lap (time, sectors, distance, profile), last 30 laps.
+
+### Drift meter (`fun.js`)
+```
+angle  = wrap(atan2(vel) − atan2(heading)) in degrees, ignored above 120° (reversing) or below 5 m/s
+active : |angle| > 12° and v > 8 m/s
+score += |angle| · v · dt · (1 + min(time_in_drift, 10) / 5)     (long drifts multiply up to ×3)
+ends   : 1.2 s below the threshold → last = score, best = max
+```
+
+### Virtual dyno (`fun.js`)
+At throttle > 85 % the engine's (or, on EVs, the motor's) power = τ·ω and torque are binned by 250 rpm, keeping the maximum per bin, per car (key = jbeam + configuration). It's a "best observed" curve, so it fills in as you drive through the rev range and isn't averaged.
+
+### Crash detector (`fun.js`)
+Trigger: horizontal acceleration √(gx² + gy²) > 4 g while moving. Over the next second it tracks peak g; the impact speed is the maximum speed in the 1.5 s before; damage added = damage now − damage before. Logged (last 20) and announced; > 6 g unlocks *Crash test dummy*.
+
+### Eco score (`trips.js`)
+Every driving second accumulates a penalty: (a − 2)·0.35 for acceleration above 2 m/s², (−a − 3)·0.35 for braking harder than 3 m/s², +0.6 above 80 % of the redline. Score = 100 · e^(−2 · penalty / drivingSeconds), so smooth driving stays in the 90s and a few hard launches pull it down gradually. EV / hybrid energy: kWh += motorKW · dt / 3600 (positive = used, negative = regen).
+
+### Achievements (`fun.js`)
+15 rules over the running state: distances (1 km, 100 km, 10 km at night by the in-game clock), speeds (161 / 322 km/h), cornering (≥ 1.5 g lateral), airtime (|gz| < 2 m/s² for 1 s while moving), timer results (0-100 < 5 s / < 3 s, ¼ mile < 12 s), a completed lap, drift scores, a 6 g crash, eco ≥ 90 over 10 km. Unlock time is saved, and a toast and chime go to every screen.
+
+### Portrait layout (`cluster.js`)
+If height > 1.15 × width, the 1600-unit virtual canvas is scaled to the screen width (instead of letterboxed). The cluster occupies the top 600 units, and the remaining height (≈ 2 840 units on 1080×1920) holds two `MFD` panels: the current page and a pinned page (`MFD.drawPage` renders any page without changing the current one). Classic designs don't show pop-ups in portrait, since the pages are always visible.
+
+### Alerts (`alerts.js`)
+Edge-triggered, with cooldowns so nothing nags: speed warning every 8 s while above, over-limit every 10 s (limit rounded to 5, plus tolerance), low fuel once per drop below 10 % (re-arms above 15 %), shift beep with hysteresis (re-arms below 90 % of the shift rpm). Chimes are synthesized with Web Audio oscillators (no audio files). Night dimming: × 0.62 between 21:00 and 05:00 game time, × 0.8 at dusk / dawn.
+
+**Spoken navigation:** for each upcoming manoeuvre (keyed by its distance along the route) it speaks once at 800 m, 300 m and 60 m, using `speechSynthesis`, in metric or imperial units. On iOS speech needs one tap on the page first.
+
+### Drive recorder (`recorder.js`)
+A write stream to `data/recordings/drive-<date>-<car>.csv`, throttled to one row per 100 ms. Columns: time, speed, rpm, gear, pedals, steering, g lat/long/vert, x/y/z, fuel % / L, coolant, oil, boost, engine kW, motor kW, battery %, odometer. Download / delete only accept plain `[\w.-]+\.csv` names inside that folder.

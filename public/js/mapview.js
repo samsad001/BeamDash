@@ -146,6 +146,16 @@ window.MapView = (() => {
       c.beginPath(); c.moveTo(q[0] - 7, q[1] - 10); c.lineTo(q[0], q[1]); c.lineTo(q[0] + 7, q[1] - 10); c.fill();
       c.restore();
     }
+    // lap start/finish line (chequered)
+    if (o.lapLine) {
+      const a = P.p(o.lapLine.x1, o.lapLine.y1), b = P.p(o.lapLine.x2, o.lapLine.y2);
+      c.save();
+      c.lineWidth = 8; c.strokeStyle = '#fff';
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+      c.setLineDash([8, 8]); c.strokeStyle = '#000';
+      c.beginPath(); c.moveTo(a[0], a[1]); c.lineTo(b[0], b[1]); c.stroke();
+      c.restore();
+    }
     if (o.dest) {
       const q = P.p(o.dest[0], o.dest[1]);
       c.strokeStyle = '#e8352b'; c.lineWidth = 3;
@@ -158,7 +168,8 @@ window.MapView = (() => {
       if (q[0] < x - 30 || q[0] > x + w + 30 || q[1] < y - 30 || q[1] > y + h + 30) continue;
       const hd = Math.atan2(-v.hy, v.hx) + P.rot; // screen angle
       const me = v.me || v.id === o.myId;
-      const sz = me ? (o.meSize || 16) : (o.otherSize || 9);
+      const sz = me ? (o.meSize || 16) : (o.otherSize || 9) * (o.watched === v.id ? 1.6 : 1);
+      if (o.watched === v.id) { c.strokeStyle = '#c07aff'; c.lineWidth = 3; c.beginPath(); c.arc(q[0], q[1], sz * 1.6, 0, Math.PI * 2); c.stroke(); }
       c.save();
       c.translate(q[0], q[1]);
       c.rotate(hd);

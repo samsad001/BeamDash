@@ -40,7 +40,7 @@
         <button class="btn" id="zout">－</button>
         <select id="theme" class="btn" style="width:auto"><option value="dark">Dark</option><option value="night">Night</option><option value="light">Light</option><option value="amber">Amber</option></select>
       </div>
-      <div class="pop" id="pop"><button class="btn primary small" id="goHere">Navigate here</button><button class="btn small" id="popX">✕</button></div>
+      <div class="pop" id="pop"><button class="btn primary small" id="goHere">Navigate here</button><button class="btn small" id="lapHere">🏁 Start/finish here</button><button class="btn small" id="popX">✕</button></div>
     </div>
     <aside class="side">
       <div class="card" style="margin-bottom:12px"><h3>Navigation</h3>
@@ -49,7 +49,9 @@
         <div class="btns" style="margin-top:12px"><button class="btn small danger" id="clearRoute">Clear route</button><button class="btn small" id="reloadMap">Reload map</button></div>
       </div>
       <div class="card" style="margin-bottom:12px"><h3>World</h3><div class="kv" id="world"></div></div>
-      <div class="card"><h3>Vehicles</h3><div class="vlist" id="vlist"></div></div>
+      <div class="card"><h3>Vehicles</h3>
+        <p class="muted" style="font-size:12px;margin-top:0">👁 Watch streams that car's live data to every screen (cluster, telemetry…).</p>
+        <div class="vlist" id="vlist"></div></div>
     </aside>
   </div>
   <script src="/js/client.js"></script>

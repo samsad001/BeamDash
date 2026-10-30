@@ -47,33 +47,32 @@
   }
 
   // ---------------------------------------------------------------- sizing
-  let scale = 1, ox = 0, oy = 0;
+  // landscape: the 1600x600 cluster is letterboxed. Portrait (e.g. a 1080x1920 side monitor): the cluster
+  // sits on top at full width and the rest of the screen shows two large info pages.
+  let scale = 1, ox = 0, oy = 0, portrait = false, PH = VH;
   function resize() {
     const dpr = Math.min(window.devicePixelRatio || 1, 2.5);
     const w = window.innerWidth, h = window.innerHeight;
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
-    scale = Math.min(w / VW, h / VH) * dpr;
-    ox = (canvas.width - VW * scale) / 2;
-    oy = (canvas.height - VH * scale) / 2;
+    portrait = h > w * 1.15 && !qp.has('landscape');
+    document.body.classList.toggle('portrait', portrait);
+    if (portrait) {
+      scale = (w / VW) * dpr;
+      ox = 0; oy = 0;
+      PH = canvas.height / scale; // virtual height of the whole tall screen
+    } else {
+      scale = Math.min(w / VW, h / VH) * dpr;
+      ox = (canvas.width - VW * scale) / 2;
+      oy = (canvas.height - VH * scale) / 2;
+      PH = VH;
+    }
   }
   window.addEventListener('resize', resize);
   resize();
 
-  // ---------------------------------------------------------------- sound
-  let audio = null;
-  function beep(freq, dur, vol = 0.15, type = 'square') {
-    if (!S.sounds || !audio) return;
-    const o = audio.createOscillator(), g = audio.createGain();
-    o.type = type; o.frequency.value = freq;
-    g.gain.setValueAtTime(vol, audio.currentTime);
-    g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + dur);
-    o.connect(g).connect(audio.destination);
-    o.start(); o.stop(audio.currentTime + dur);
-  }
-  const unlock = () => { if (!audio) { try { audio = new (window.AudioContext || window.webkitAudioContext)(); } catch { /* no audio */ } } };
-  window.addEventListener('pointerdown', unlock, { once: false });
-  let lastSig = false, lastFcw = 0, fcwBeep = 0;
+  // ---------------------------------------------------------------- sound (see alerts.js)
+  const beep = () => Alerts.play('tick');
 
   // ---------------------------------------------------------------- chips (assist info on classic designs)
   const chipsEl = document.getElementById('chips');
@@ -107,7 +106,7 @@
     const slot = def.mfd ? def.mfd(o, d) : null;
     try {
       if (slot && !slot.line) MFD.draw(c, d, slot.x, slot.y, slot.w, slot.h, { ...(def.mfdTheme || {}), ...(slot.theme || {}) });
-      else if (!slot && live) MFD.popup(c, d, def.mfdTheme);
+      else if (!slot && live && !portrait) MFD.popup(c, d, def.mfdTheme);
     } catch (err) { console.error('mfd', err); }
     if (def.glass) {
       // faint sheet-of-glass reflection across the whole cluster
@@ -178,6 +177,32 @@
   });
 
   // ---------------------------------------------------------------- render loop
+  // portrait: two big info screens under the cluster (the flip-through page + one you pin in Customize)
+  function drawPortrait(c, d) {
+    const top = VH + 30, avail = PH - top - 40;
+    if (avail < 300) return;
+    const th = { ...(design.mfdTheme || {}), bg: 'rgba(255,255,255,.05)' };
+    const pinned = S.portraitPage || 'trip';
+    const h1 = (avail - 30) * 0.5;
+    MFD.draw(c, d, 40, top, VW - 80, h1, th);
+    if (pinned !== 'none') MFD.drawPage(c, d, pinned === MFD.page.id ? 'nav' : pinned, 40, top + h1 + 30, VW - 80, h1, th);
+  }
+  // big warning banners (speed warning, over the limit, low fuel, crash, drift score)
+  function drawBanner(c, d) {
+    const b = Alerts.banner;
+    const left = b.until - performance.now();
+    if (left <= 0) return;
+    c.save();
+    c.globalAlpha = Math.min(1, left / 300);
+    const col = { warn: '#ffb000', limit: '#ff3b30', drift: '#c07aff' }[b.kind] || '#4aa3ff';
+    const w = 520, h = 96, x = VW / 2 - w / 2, y = 20;
+    c.fillStyle = 'rgba(0,0,0,.85)'; G.rrect(c, x, y, w, h, 20); c.fill();
+    c.strokeStyle = col; c.lineWidth = 4; c.stroke();
+    if (b.kind === 'limit' && d.speedLimit) G.limitSign(c, x + 60, y + h / 2, 34, Math.round(U.speed(d.speedLimit) / 5) * 5, S.speedUnit === 'mph');
+    G.text(c, b.text, VW / 2 + (b.kind === 'limit' ? 30 : 0), y + h / 2 + 2, 44, col, 'center', 'Rajdhani', 700);
+    c.restore();
+  }
+
   let last = performance.now(), acc = 0, t0 = performance.now();
   function frame(now) {
     requestAnimationFrame(frame);
@@ -194,16 +219,16 @@
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.globalAlpha = 1;
     drawDesign(ctx, design, d, (now - t0) / 1000, true);
-    if (S.brightness < 1) {
+    if (portrait) drawPortrait(ctx, d);
+    drawBanner(ctx, d);
+    // brightness setting x automatic night dimming
+    const bright = S.brightness * Alerts.dimFactor(d);
+    if (bright < 1) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.fillStyle = `rgba(0,0,0,${1 - S.brightness})`;
+      ctx.fillStyle = `rgba(0,0,0,${1 - bright})`;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
-    // sounds
-    const sig = d.lights.sigL || d.lights.sigR;
-    if (sig !== lastSig) { beep(sig ? 1400 : 900, 0.03, 0.08, 'triangle'); lastSig = sig; }
-    if (d.fcw && now - fcwBeep > (d.fcw === 2 ? 180 : 600)) { beep(d.fcw === 2 ? 2200 : 1600, 0.09, 0.2); fcwBeep = now; }
-    lastFcw = d.fcw;
+    Alerts.update(d, now);
     chipTimer += fdt;
     if (chipTimer > 0.2) { chipTimer = 0; updateChips(d); }
   }
@@ -236,7 +261,7 @@
   let thumbTimer = null;
   function buildDesignList() {
     const el = document.getElementById('designList');
-    const eras = ['1970s', '1980s', '1990s', '2000s', '2010s', '2020s', 'Custom'];
+    const eras = ['1960s', '1970s', '1980s', '1990s', '2000s', '2010s', '2020s', 'Custom'];
     el.innerHTML = eras.map((era) => {
       const items = DESIGNS.filter((x) => x.era === era);
       if (!items.length) return '';
@@ -293,6 +318,19 @@
     bindSel('redline', 'redline', true); bindSel('shiftRpm', 'shiftRpm', true); bindSel('fps', 'fps', true);
     bindSel('brightness', 'brightness', true); bindSel('sounds', 'sounds'); bindSel('assistChips', 'assistChips');
     bindSel('wheelButtons', 'wheelButtons'); bindSel('cruiseStep', 'cruiseStep', true);
+    bindSel('speedWarn', 'speedWarn', true); bindSel('limitWarn', 'limitWarn'); bindSel('limitTol', 'limitTol', true);
+    bindSel('lowFuelChime', 'lowFuelChime'); bindSel('shiftBeep', 'shiftBeep'); bindSel('autoDim', 'autoDim'); bindSel('voice', 'voice');
+    const pp = document.getElementById('portraitPage');
+    pp.innerHTML = '<option value="none">(none)</option>' + MFD.PAGES.map((p) => `<option value="${p.id}">${p.name}</option>`).join('');
+    bindSel('portraitPage', 'portraitPage');
+    const tg = document.getElementById('pageToggles');
+    tg.innerHTML = MFD.PAGES.map((p) => `<label style="display:flex;gap:8px;align-items:center;font-size:14px"><input type="checkbox" data-page="${p.id}" ${(S.mfdOff || []).includes(p.id) ? '' : 'checked'}> ${p.name}</label>`).join('');
+    tg.querySelectorAll('[data-page]').forEach((cb) => (cb.onchange = () => {
+      const off = new Set(S.mfdOff || []);
+      if (cb.checked) off.delete(cb.dataset.page); else off.add(cb.dataset.page);
+      S.mfdOff = [...off];
+      BD.save();
+    }));
   }
   const applyWheel = () => { if (wheel) wheel.style.display = S.wheelButtons === false ? 'none' : ''; };
   BD.on('settings', applyWheel);

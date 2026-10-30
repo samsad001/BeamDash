@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07090d">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <title>BeamDash Connect</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    .qrs { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 14px; }
+    .qr { background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 16px; text-align: center; }
+    .qr .code { background: #fff; padding: 12px; border-radius: 12px; display: inline-block; margin: 8px 0; min-height: 200px; min-width: 200px; }
+    .qr .code img, .qr .code canvas { display: block; }
+    .qr b { display: block; font-size: 16px; }
+    .qr code { color: #9fd0ff; font-size: 13px; word-break: break-all; }
+    .seg { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="card" style="margin-bottom:14px"><h3>Connect a phone or tablet</h3>
+      <p style="margin:0 0 10px">Scan a code with the phone's camera (same Wi-Fi). Pick what the code opens:</p>
+      <div class="seg" id="pages"></div>
+      <p class="muted" style="font-size:13px;margin:0" id="ver"></p>
+    </div>
+    <div class="qrs" id="qrs"></div>
+    <div class="card" style="margin-top:14px"><h3>Streaming (OBS)</h3>
+      <p style="margin:0 0 8px">Add a <b>Browser source</b> in OBS, 1920 × 1080, with this URL. The background is transparent:</p>
+      <p><code id="obsUrl"></code> <button class="btn small" id="copyObs">Copy</button></p>
+      <p class="muted" style="font-size:13px">Shows speed, gear, revs, pedals and G, plus the lap timer, drift score and launch timer when they're active.</p>
+    </div>
+  </main>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+  <script src="/js/client.js"></script>
+  <script>
+  (() => {
+    BD.nav('connect');
+    BD.connect();
+    const PAGES = [['/', 'Cluster'], ['/deck', 'Deck (buttons)'], ['/hud', 'HUD'], ['/telemetry', 'Telemetry'], ['/map', 'Map & Nav']];
+    let page = '/', info = null;
+    const pagesEl = document.getElementById('pages');
+    pagesEl.innerHTML = PAGES.map(([p, n]) => `<button class="btn small ${p === page ? 'on' : ''}" data-p="${p}">${n}</button>`).join('');
+    pagesEl.querySelectorAll('button').forEach((b) => (b.onclick = () => { page = b.dataset.p; pagesEl.querySelectorAll('button').forEach((x) => x.classList.toggle('on', x === b)); render(); }));
+    function render() {
+      if (!info) return;
+      const hosts = [...info.addresses, info.hostname];
+      const box = document.getElementById('qrs');
+      box.innerHTML = hosts.map((h, i) => `<div class="qr"><b>${i < info.addresses.length ? 'Network address' : 'PC name'}</b><div class="code" id="qr${i}"></div><br><code>http://${h}:${info.port}${page === '/' ? '' : page}</code></div>`).join('');
+      hosts.forEach((h, i) => {
+        const url = `http://${h}:${info.port}${page === '/' ? '' : page}`;
+        if (window.QRCode) new QRCode(document.getElementById('qr' + i), { text: url, width: 200, height: 200, colorDark: '#000', colorLight: '#fff' });
+        else document.getElementById('qr' + i).textContent = 'QR library needs internet; type the address below.';
+      });
+      const obs = `${location.origin}/hud?obs=1`;
+      document.getElementById('obsUrl').textContent = obs;
+      document.getElementById('copyObs').onclick = () => navigator.clipboard.writeText(obs).then(() => BD.toast('Copied'), () => prompt('OBS URL', obs));
+    }
+    fetch('/api/info').then((r) => r.json()).then((j) => {
+      info = j;
+      document.getElementById('ver').textContent = `BeamDash ${j.version} · server ${j.hostname}, port ${j.port}`;
+      render();
+    });
+  })();
+  </script>
+</body>
+</html>

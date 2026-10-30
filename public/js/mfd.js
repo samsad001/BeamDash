@@ -6,16 +6,23 @@ window.MFD = (() => {
   const U = BD.U;
   const PAGES = [
     { id: 'trip', name: 'Trip computer' },
-    { id: 'economy', name: 'Fuel economy' },
+    { id: 'economy', name: 'Economy & eco score' },
+    { id: 'energy', name: 'Energy flow' },
     { id: 'media', name: 'Now playing' },
     { id: 'nav', name: 'Navigation' },
     { id: 'assist', name: 'Driver assist' },
     { id: 'speed', name: 'Digital speed' },
+    { id: 'perf', name: 'Performance timer' },
+    { id: 'lap', name: 'Lap timer' },
+    { id: 'drift', name: 'Drift meter' },
+    { id: 'dyno', name: 'Virtual dyno' },
     { id: 'tires', name: 'Tires' },
+    { id: 'damage', name: 'Damage' },
     { id: 'gforce', name: 'G-force' },
     { id: 'engine', name: 'Engine' },
     { id: 'car', name: 'Vehicle & service' },
   ];
+  const enabled = (i) => !(BD.settings.mfdOff || []).includes(PAGES[i].id);
   const TRIPS = [['a', 'TRIP A'], ['b', 'TRIP B'], ['start', 'SINCE START']];
   const load = (k, d) => { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch { return d; } };
   const store = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch { /* ignore */ } };
@@ -29,7 +36,11 @@ window.MFD = (() => {
   const cur = () => PAGES[page];
   function flash(msg) { toastText = msg; toastUntil = performance.now() + 1800; popupUntil = Math.max(popupUntil, toastUntil); }
   function next(dir = 1) {
-    page = (page + dir + PAGES.length) % PAGES.length;
+    // skip pages switched off in Customize
+    for (let i = 0; i < PAGES.length; i++) {
+      page = (page + dir + PAGES.length) % PAGES.length;
+      if (enabled(page)) break;
+    }
     store('bd.mfd.page', page);
     popupUntil = performance.now() + 5000;
   }
@@ -44,6 +55,14 @@ window.MFD = (() => {
       case 'assist': BD.action('acc-gap'); flash('Following distance'); break;
       case 'gforce': gPeak = 0; flash('Peak reset'); break;
       case 'economy': flash('Hold OK to reset economy'); break;
+      case 'lap': {
+        const lp = BD.st.perf && BD.st.perf.lap;
+        if (!lp || !lp.line) { BD.action('lap-line-here'); flash('Start/finish set here'); } else flash('Hold OK: reset laps');
+        break;
+      }
+      case 'perf': flash('Stop, then launch to time a run'); break;
+      case 'drift': flash('Hold OK: reset best drift'); break;
+      case 'dyno': flash('Floor it through the revs · hold OK resets'); break;
       default: next(1);
     }
   }
@@ -52,6 +71,10 @@ window.MFD = (() => {
     if (cur().id === 'trip') { const [k, n] = TRIPS[tripView]; BD.action(k === 'start' ? 'start-reset' : `trip-${k}-reset`); flash(`${n} reset`); }
     else if (cur().id === 'economy') { BD.action('economy-reset'); flash('Fuel economy reset'); }
     else if (cur().id === 'gforce') { gPeak = 0; flash('Peak reset'); }
+    else if (cur().id === 'perf') { BD.action('perf-reset'); flash('Performance bests reset'); }
+    else if (cur().id === 'lap') { BD.action('lap-reset'); flash('Lap times reset'); }
+    else if (cur().id === 'drift') { BD.action('drift-reset'); flash('Best drift reset'); }
+    else if (cur().id === 'dyno') { BD.action('dyno-reset'); flash('Dyno reset'); }
     else flash('Nothing to reset here');
   }
   function goto(id) { const i = PAGES.findIndex((p) => p.id === id); if (i >= 0) { page = i; store('bd.mfd.page', page); popupUntil = performance.now() + 5000; } }
@@ -107,7 +130,13 @@ window.MFD = (() => {
     stat(c, x, y + u * 2.4, w / 2, 'Average since reset', cons(t.avgCons), th, u, true);
     stat(c, x + w / 2, y + u * 2.4, w / 2, 'Range', d.range ? km(d.range) : '---', th, u, true);
     stat(c, x, y + u * 3.7, w / 2, 'Distance since reset', km(t.dist || 0), th, u);
-    stat(c, x + w / 2, y + u * 3.7, w / 2, d.electric ? 'Battery' : 'Fuel', `${Math.round(d.fuel * 100)}%  ·  ${d.fuelVol.toFixed(1)} L`, th, u);
+    const eco = t.eco;
+    stat(c, x + w / 2, y + u * 3.7, w / 2, 'Eco score', eco === null || eco === undefined ? '--' : `${eco} / 100`, th, u);
+    if (eco !== null && eco !== undefined) {
+      c.fillStyle = th.line; rrect(c, x + w / 2, y + u * 4.45, w / 2 - u * 0.2, u * 0.12, u * 0.06); c.fill();
+      c.fillStyle = eco >= 80 ? '#2bd46a' : eco >= 55 ? '#ffb000' : '#ff3b30';
+      rrect(c, x + w / 2, y + u * 4.45, (w / 2 - u * 0.2) * eco / 100, u * 0.12, u * 0.06); c.fill();
+    }
     text(c, 'hold OK: reset average', x, y + h - u * 0.2, u * 0.3, th.dim, 'left', th.font, 600);
   };
   R.media = (c, d, x, y, w, h, th, u) => {
@@ -229,7 +258,197 @@ window.MFD = (() => {
     text(c, msgs.length ? `⚠ ${msgs.join(' · ')}` : '✓ No check-control messages', x, y + h - u * 0.25, u * 0.34, msgs.length ? '#ffb000' : th.dim, 'left', th.font, 700);
   };
 
+  // ---------------------------------------------------------------- v0.04 pages
+  const fmtS = (s, dp = 2) => (typeof s === 'number' ? `${s.toFixed(dp)} s` : '--');
+  const lapStr = (s) => (typeof s === 'number' ? `${Math.floor(s / 60)}:${(s % 60).toFixed(3).padStart(6, '0')}` : '-:--.---');
+
+  // power flow: engine / battery / motor / wheels, with a CHG-ECO-PWR meter (hybrids) or kW meter (EVs)
+  R.energy = (c, d, x, y, w, h, th, u) => {
+    if (!d.isEV && !d.isHybrid) {
+      text(c, 'Combustion car', x, y + u * 0.5, u * 0.55, th.fg, 'left', th.font, 700);
+      text(c, 'No electric drive in this vehicle', x, y + u * 1.1, u * 0.34, th.dim, 'left', th.font, 600);
+      stat(c, x, y + u * 2.0, w, 'Engine power now', `${Math.round(Math.max(0, d.engKw))} kW  ·  ${Math.round(Math.max(0, d.engKw) * 1.341)} hp`, th, u, true);
+      stat(c, x, y + u * 3.4, w, 'Engine torque', `${Math.round(Math.max(0, d.engNm))} Nm`, th, u);
+      return;
+    }
+    const t = (BD.st.trips || {}).a || {};
+    const mk = d.motorKw, ek = Math.max(0, d.engKw);
+    const box = (bx, by, label, active, col) => {
+      c.fillStyle = active ? col + '33' : th.line; rrect(c, bx - u * 0.9, by - u * 0.45, u * 1.8, u * 0.9, u * 0.2); c.fill();
+      c.strokeStyle = active ? col : th.line; c.lineWidth = 2; c.stroke();
+      text(c, label, bx, by, u * 0.32, active ? th.fg : th.dim, 'center', th.font, 700);
+    };
+    const flow = (x1, y1, x2, y2, on, col) => {
+      c.strokeStyle = on ? col : th.line; c.lineWidth = u * 0.1;
+      c.setLineDash(on ? [u * 0.25, u * 0.18] : []);
+      c.lineDashOffset = on ? -(performance.now() / 40) % (u * 0.43) : 0;
+      c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.setLineDash([]);
+    };
+    const cx = x + w * 0.5, rowE = y + u * 0.6, rowW = y + u * 2.1, rowB = y + u * 3.6;
+    const green = '#2bd46a', blue = th.accent, orange = '#ffb000';
+    if (d.isHybrid) { box(x + w * 0.2, rowE, 'ENGINE', ek > 2, orange); flow(x + w * 0.2, rowE + u * 0.45, cx - u * 0.6, rowW, ek > 2, orange); }
+    box(cx, rowW, 'WHEELS', d.speed > 0.5, th.fg);
+    box(x + w * 0.8, rowE, 'MOTOR', Math.abs(mk) > 1, mk < -1 ? green : blue);
+    flow(x + w * 0.8, rowE + u * 0.45, cx + u * 0.6, rowW, Math.abs(mk) > 1, mk < -1 ? green : blue);
+    box(x + w * 0.8, rowB, `BATTERY ${d.battery !== null ? Math.round(d.battery * 100) + '%' : ''}`, Math.abs(mk) > 1, mk < -1 ? green : blue);
+    flow(x + w * 0.8, rowE + u * 0.45, x + w * 0.8, rowB - u * 0.45, Math.abs(mk) > 1, mk < -1 ? green : blue);
+    // CHG / ECO / PWR style meter
+    const mx = x, my = rowB + u * 0.9, mw = w * 0.6;
+    const frac = clamp((mk + 60) / 160, 0, 1);
+    c.fillStyle = th.line; rrect(c, mx, my, mw, u * 0.28, u * 0.14); c.fill();
+    c.fillStyle = mk < -1 ? green : mk > 40 ? orange : blue; rrect(c, mx + mw * Math.min(frac, 60 / 160), my, mw * Math.abs(frac - 60 / 160), u * 0.28, u * 0.14); c.fill();
+    text(c, 'CHG', mx, my - u * 0.25, u * 0.26, green, 'left', th.font, 700);
+    text(c, 'ECO', mx + mw * 0.45, my - u * 0.25, u * 0.26, th.dim, 'center', th.font, 700);
+    text(c, 'PWR', mx + mw, my - u * 0.25, u * 0.26, orange, 'right', th.font, 700);
+    text(c, `${mk >= 0 ? '' : '−'}${Math.abs(Math.round(mk))} kW`, mx + mw + u * 0.3, my + u * 0.15, u * 0.42, th.fg, 'left', th.font, 700);
+    text(c, `Trip A: ${(t.energy || 0).toFixed(2)} kWh used · ${(t.regen || 0).toFixed(2)} kWh regen${t.kwhPer100 ? ` · ${t.kwhPer100.toFixed(1)} kWh/100km` : ''}`, x, y + h - u * 0.2, u * 0.28, th.dim, 'left', th.font, 600);
+  };
+
+  R.perf = (c, d, x, y, w, h, th, u) => {
+    const p = BD.st.perf || {};
+    const mph = BD.settings.speedUnit === 'mph';
+    let status = 'Stop the car to arm the timer';
+    let col = th.dim;
+    if (p.state === 'ready') { status = 'READY · launch when you want'; col = '#2bd46a'; }
+    if (p.state === 'running' && p.run) { status = `RUNNING ${p.run.elapsed.toFixed(1)} s · ${U.shortDist(p.run.dist)}`; col = '#ffb000'; }
+    text(c, status, x, y + u * 0.35, u * 0.42, col, 'left', th.font, 700);
+    const L = p.last || {}, B = p.best || {};
+    const rows = [
+      [mph ? '0–60 mph' : '0–100 km/h', mph ? L.t60mph : L.t100, mph ? B.t60mph : B.t100, fmtS],
+      [mph ? '0–100 km/h' : '0–60 mph', mph ? L.t100 : L.t60mph, mph ? B.t100 : B.t60mph, fmtS],
+      ['100–200 km/h', L.t100to200, B.t100to200, fmtS],
+      ['¼ mile', L.quarter, B.quarter, (q) => (q ? `${q.time.toFixed(2)} s @ ${Math.round(U.speed(q.trap))}` : '--')],
+      ['⅛ mile', L.eighth, B.eighth, (q) => (q ? `${q.time.toFixed(2)} s @ ${Math.round(U.speed(q.trap))}` : '--')],
+      [mph ? '60–0 mph' : '100–0 km/h', mph ? L.brake60mph : L.brake100, mph ? B.brake60mph : B.brake100, (m) => (typeof m === 'number' ? U.shortDist(m) : '--')],
+    ];
+    const rh = (h - u * 1.4) / rows.length;
+    text(c, 'LAST', x + w * 0.62, y + u * 0.95, u * 0.28, th.dim, 'right', th.font, 700);
+    text(c, 'BEST', x + w, y + u * 0.95, u * 0.28, th.accent, 'right', th.font, 700);
+    rows.forEach(([n, l, b, f], i) => {
+      const yy = y + u * 1.4 + rh * (i + 0.5);
+      text(c, n, x, yy, u * 0.38, th.dim, 'left', th.font, 600);
+      text(c, f(l), x + w * 0.62, yy, u * 0.42, th.fg, 'right', th.font, 700);
+      text(c, f(b), x + w, yy, u * 0.42, th.accent, 'right', th.font, 700);
+    });
+  };
+
+  R.lap = (c, d, x, y, w, h, th, u) => {
+    const lp = (BD.st.perf || {}).lap || {};
+    if (!lp.line) {
+      text(c, 'No start/finish line', x, y + h * 0.3, u * 0.6, th.fg, 'left', th.font, 700);
+      text(c, 'Press OK here to put it where your car is,', x, y + h * 0.3 + u * 0.75, u * 0.36, th.dim, 'left', th.font, 600);
+      text(c, 'or tap the map on Map & Nav.', x, y + h * 0.3 + u * 1.2, u * 0.36, th.dim, 'left', th.font, 600);
+      return;
+    }
+    const now = BD.lapNow();
+    text(c, lp.running ? `LAP ${lp.n}` : 'CROSS THE LINE TO START', x, y + u * 0.35, u * 0.4, th.dim, 'left', th.font, 700);
+    text(c, lapStr(lp.running ? now : null), x + w / 2, y + u * 1.45, u * 1.25, th.fg, 'center', th.font, 700);
+    // gap to best lap
+    const dl = lp.delta;
+    const by = y + u * 2.45, bw = w;
+    c.fillStyle = th.line; rrect(c, x, by, bw, u * 0.32, u * 0.16); c.fill();
+    if (typeof dl === 'number') {
+      const f = clamp(dl / 3, -1, 1);
+      c.fillStyle = dl <= 0 ? '#2bd46a' : '#ff3b30';
+      const mid = x + bw / 2;
+      if (f >= 0) c.fillRect(mid, by, bw / 2 * f, u * 0.32); else c.fillRect(mid + bw / 2 * f, by, -bw / 2 * f, u * 0.32);
+      text(c, `${dl > 0 ? '+' : '−'}${Math.abs(dl).toFixed(2)}`, x + w / 2, by + u * 0.7, u * 0.46, dl <= 0 ? '#2bd46a' : '#ff3b30', 'center', th.font, 700);
+    }
+    c.fillStyle = th.fg; c.fillRect(x + bw / 2 - 1, by - u * 0.08, 2, u * 0.48);
+    const best = lp.best || {};
+    const secs = ['S1', 'S2', 'S3'];
+    const sy = y + u * 3.6;
+    secs.forEach((s, i) => {
+      const cur = lp.sectors[i], b = best.sectors ? best.sectors[i] : null;
+      const sx = x + i * w / 3;
+      const col = cur === undefined || b === null || b === undefined ? th.fg : cur <= b ? '#2bd46a' : '#ffb000';
+      text(c, s, sx, sy, u * 0.3, th.dim, 'left', th.font, 700);
+      text(c, cur !== undefined ? cur.toFixed(2) : b ? b.toFixed(2) : '--', sx, sy + u * 0.45, u * 0.42, cur !== undefined ? col : th.dim, 'left', th.font, 700);
+    });
+    text(c, `Last ${lapStr(lp.lastLap ? lp.lastLap.time : null)}    Best ${lapStr(best.time)}`, x, y + h - u * 0.2, u * 0.32, th.dim, 'left', th.font, 700);
+  };
+
+  R.drift = (c, d, x, y, w, h, th, u) => {
+    const dr = (BD.st.fun || {}).drift || {};
+    const r = Math.min(h * 0.62, w * 0.42), cx = x + w / 2, cy = y + r + u * 0.4;
+    const a0 = PI * 1.15, a1 = PI * 1.85;
+    c.lineWidth = u * 0.22; c.strokeStyle = th.line;
+    c.beginPath(); c.arc(cx, cy, r, a0, a1); c.stroke();
+    const f = clamp((dr.angle || 0) / 60, -1, 1);
+    const am = (a0 + a1) / 2;
+    c.strokeStyle = Math.abs(dr.angle || 0) > 12 ? '#ffb000' : th.accent;
+    c.beginPath(); c.arc(cx, cy, r, Math.min(am, am + f * (a1 - am)), Math.max(am, am + f * (a1 - am))); c.stroke();
+    text(c, `${Math.round(Math.abs(dr.angle || 0))}°`, cx, cy - r * 0.45, u * 0.7, th.fg, 'center', th.font, 700);
+    text(c, dr.active ? String(dr.score) : dr.last ? String(dr.last) : '0', cx, cy - r * 0.05, u * 1.0, dr.active ? '#ffb000' : th.fg, 'center', th.font, 700);
+    text(c, dr.active ? 'DRIFTING' : 'LAST DRIFT', cx, cy + r * 0.2, u * 0.3, th.dim, 'center', th.font, 700);
+    text(c, `Best ${dr.best || 0}`, x, y + h - u * 0.2, u * 0.34, th.accent, 'left', th.font, 700);
+  };
+
+  R.dyno = (c, d, x, y, w, h, th, u) => {
+    const dy = (BD.st.fun || {}).dyno;
+    const bins = dy ? Object.entries(dy.bins).map(([r, v]) => [+r, v[0], v[1]]).sort((a, b) => a[0] - b[0]) : [];
+    if (bins.length < 3) {
+      text(c, 'Collecting…', x, y + h * 0.35, u * 0.6, th.fg, 'left', th.font, 700);
+      text(c, 'Floor it (full throttle) through the rev range.', x, y + h * 0.35 + u * 0.7, u * 0.34, th.dim, 'left', th.font, 600);
+      return;
+    }
+    const maxR = bins[bins.length - 1][0], minR = bins[0][0];
+    const maxP = Math.max(...bins.map((b) => b[1])), maxT = Math.max(...bins.map((b) => b[2]));
+    const gx = x, gy = y + u * 0.9, gw = w, gh = h - u * 1.6;
+    c.strokeStyle = th.line; c.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) { c.beginPath(); c.moveTo(gx, gy + gh * i / 4); c.lineTo(gx + gw, gy + gh * i / 4); c.stroke(); }
+    const px = (r) => gx + (r - minR) / Math.max(1, maxR - minR) * gw;
+    const curve = (idx, max, col) => {
+      c.strokeStyle = col; c.lineWidth = u * 0.08; c.beginPath();
+      bins.forEach((b, i) => { const yy = gy + gh - b[idx] / max * gh * 0.95; i ? c.lineTo(px(b[0]), yy) : c.moveTo(px(b[0]), yy); });
+      c.stroke();
+    };
+    curve(1, maxP, '#ff3b30'); curve(2, maxT, th.accent);
+    const peakP = bins.reduce((a, b) => (b[1] > a[1] ? b : a)), peakT = bins.reduce((a, b) => (b[2] > a[2] ? b : a));
+    text(c, `${Math.round(peakP[1])} kW (${Math.round(peakP[1] * 1.341)} hp) @ ${peakP[0]}`, x, y + u * 0.3, u * 0.36, '#ff6a5f', 'left', th.font, 700);
+    text(c, `${Math.round(peakT[2])} Nm @ ${peakT[0]}`, x + w, y + u * 0.3, u * 0.36, th.accent, 'right', th.font, 700);
+    text(c, `${minR}`, gx, gy + gh + u * 0.3, u * 0.26, th.dim, 'left', th.font, 600);
+    text(c, `${maxR} rpm`, gx + gw, gy + gh + u * 0.3, u * 0.26, th.dim, 'right', th.font, 600);
+  };
+
+  R.damage = (c, d, x, y, w, h, th, u) => {
+    const dm = BD.st.dmg;
+    if (!dm) { text(c, 'No damage data', x, y + h * 0.4, u * 0.5, th.dim, 'left', th.font, 700); return; }
+    const issues = [];
+    if (dm.engine && dm.engine.disabled) issues.push(['Engine disabled', true]);
+    for (const [k] of Object.entries(dm.flags || {})) issues.push([k.replace(/\./g, ': ').replace(/([a-z])([A-Z])/g, '$1 $2'), /engine|radiator|oil|gearbox|transmission/i.test(k)]);
+    for (const b of dm.broken || []) issues.push([`Broken: ${b}`, true]);
+    for (const wd of dm.wheels || []) issues.push([`${wd.name}: ${wd.broken ? 'wheel broken' : 'flat tire'}`, true]);
+    const parts = Object.entries(dm.deform || {}).sort((a, b) => b[1] - a[1]);
+    // car outline with damaged zones
+    const ch = h - u * 0.9, cw = ch * 0.45, cx = x + cw / 2 + u * 0.2, cy = y + u * 0.4 + ch / 2;
+    const zone = (re) => parts.some(([n]) => re.test(n));
+    c.fillStyle = th.line; rrect(c, cx - cw / 2, cy - ch / 2, cw, ch, cw * 0.3); c.fill();
+    const hit = (zx, zy, zw, zh, on) => { if (on) { c.fillStyle = 'rgba(255,59,48,.55)'; rrect(c, zx, zy, zw, zh, u * 0.15); c.fill(); } };
+    hit(cx - cw / 2, cy - ch / 2, cw, ch * 0.22, zone(/(^|_)F(_|$)|front|bumper_F|hood|headlight|radiator/i));
+    hit(cx - cw / 2, cy + ch * 0.28, cw, ch * 0.22, zone(/(^|_)R(_|$)|rear|bumper_R|trunk|taillight|tailgate/i));
+    hit(cx - cw / 2, cy - ch * 0.28, cw * 0.3, ch * 0.56, zone(/_L$|left|_FL|_RL|mirror_L|door_L/i));
+    hit(cx + cw * 0.2, cy - ch * 0.28, cw * 0.3, ch * 0.56, zone(/_R$|right|_FR|_RR|mirror_R|door_R/i));
+    for (const wd of dm.wheels || []) {
+      const p = { FL: [-1, -1], FR: [1, -1], RL: [-1, 1], RR: [1, 1] }[wd.name];
+      if (p) { c.fillStyle = '#ff3b30'; c.beginPath(); c.arc(cx + p[0] * cw / 2, cy + p[1] * ch * 0.3, u * 0.22, 0, TAU); c.fill(); }
+    }
+    const lx = x + cw + u * 0.8;
+    text(c, `Damage ${Math.round(dm.total || 0)}`, lx, y + u * 0.35, u * 0.5, (dm.total || 0) > 2000 ? '#ff3b30' : th.fg, 'left', th.font, 700);
+    const lines = [...issues.map(([n, bad]) => [n, bad ? '#ff3b30' : '#ffb000']), ...parts.slice(0, 8).map(([n, v]) => [`${n.replace(/_/g, ' ')}  ${Math.round(Math.min(1, v) * 100)}%`, th.dim])];
+    const maxLines = Math.floor((h - u * 1.1) / (u * 0.5));
+    lines.slice(0, maxLines).forEach(([s, col], i) => text(c, s, lx, y + u * 1.0 + i * u * 0.5, u * 0.32, col, 'left', th.font, 600));
+    if (!lines.length) text(c, '✓ No broken parts', lx, y + u * 1.0, u * 0.36, '#2bd46a', 'left', th.font, 700);
+  };
+
   // ---------------------------------------------------------------- frame
+  function drawPage(c, d, id, x, y, w, h, th0, o) {
+    const keep = page;
+    const i = PAGES.findIndex((p) => p.id === id);
+    if (i >= 0) page = i;
+    try { draw(c, d, x, y, w, h, th0, o); } finally { page = keep; }
+  }
   function draw(c, d, x, y, w, h, th0, o = {}) {
     const th = { ...DEFAULT_TH, ...(th0 || {}) };
     c.save();
@@ -266,6 +485,12 @@ window.MFD = (() => {
     if (p === 'engine') return `OIL ${Math.round(U.temp(d.oilT))}°  H2O ${Math.round(U.temp(d.water))}°  BOOST ${U.boost(d.boost).toFixed(1)}`;
     if (p === 'gforce') return `G ${(Math.hypot(d.gx, d.gy) / 9.81).toFixed(2)}  PEAK ${gPeak.toFixed(2)}`;
     if (p === 'tires') return (d.wheels || []).map((w) => `${w.name} ${w.pressure ? U.tire(w.pressure).toFixed(0) : '-'}`).join(' ');
+    if (p === 'energy') return d.isEV || d.isHybrid ? `${Math.round(d.motorKw)} kW  BATT ${d.battery !== null ? Math.round(d.battery * 100) : '--'}%` : `ENGINE ${Math.round(Math.max(0, d.engKw))} kW`;
+    if (p === 'perf') { const pf = BD.st.perf || {}; const b = pf.best || {}; return pf.state === 'running' && pf.run ? `RUN ${pf.run.elapsed.toFixed(1)} s` : `0-100 ${typeof b.t100 === 'number' ? b.t100.toFixed(2) : '--'}  ${pf.state === 'ready' ? 'READY' : ''}`; }
+    if (p === 'lap') { const lp = (BD.st.perf || {}).lap || {}; return lp.running ? `LAP ${lp.n} ${lapStr(BD.lapNow())}` : lp.line ? 'CROSS LINE' : 'NO LAP LINE'; }
+    if (p === 'drift') { const dr = (BD.st.fun || {}).drift || {}; return `DRIFT ${dr.active ? dr.score : dr.last || 0}  BEST ${dr.best || 0}`; }
+    if (p === 'dyno') return 'DYNO: FULL THROTTLE';
+    if (p === 'damage') { const dm = BD.st.dmg; return dm ? `DAMAGE ${Math.round(dm.total || 0)}` : 'NO DAMAGE DATA'; }
     return `ODO ${km(d.odo)}`;
   }
 
@@ -285,5 +510,5 @@ window.MFD = (() => {
     c.restore();
   }
 
-  return { PAGES, next, back, ok, hold, goto, draw, line, popup, flash, get page() { return cur(); }, get popupVisible() { return performance.now() < popupUntil; } };
+  return { PAGES, next, back, ok, hold, goto, draw, drawPage, line, popup, flash, get page() { return cur(); }, get popupVisible() { return performance.now() < popupUntil; } };
 })();

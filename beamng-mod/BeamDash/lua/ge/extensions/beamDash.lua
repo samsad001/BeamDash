@@ -24,6 +24,7 @@ local adas = {
 local adasState = { lead = nil, fcw = 0, bsmL = false, bsmR = false, aeb = false }
 local aebBraking = false
 local speedLimit, roadName = nil, nil
+local watchedId = nil
 
 local function r(v, d)
   if type(v) ~= "number" or v ~= v then return 0 end
@@ -314,7 +315,7 @@ local function sendWorld()
   local msg = {
     t = "world", level = levelName, myId = myId, vehicles = vehicles,
     route = routeData(), adas = adas, adasState = adasState,
-    speedLimit = speedLimit, road = roadName, queued = #chunkQueue,
+    speedLimit = speedLimit, road = roadName, queued = #chunkQueue, watched = watchedId,
   }
   pcall(function()
     local tod = core_environment.getTimeOfDay()
@@ -374,6 +375,21 @@ geActions.timeOfDay = function(a)
   core_environment.setTimeOfDay(tod)
 end
 geActions.pause = function(a) simTimeAuthority.pause(a.value and true or false) end
+-- spectate another vehicle's live data (AI traffic, a parked car...). vid = nil stops watching.
+geActions.watch = function(a)
+  if watchedId then
+    local old = be:getObjectByID(watchedId)
+    if old then old:queueLuaCommand("if beamDashVeh then beamDashVeh.setWatched(false) end") end
+  end
+  watchedId = nil
+  if a.vid and a.vid ~= be:getPlayerVehicleID(0) then
+    local v = be:getObjectByID(a.vid)
+    if not v then error("no vehicle " .. tostring(a.vid)) end
+    tellVehicleTarget(v)
+    v:queueLuaCommand("if beamDashVeh then beamDashVeh.setWatched(true) end")
+    watchedId = a.vid
+  end
+end
 
 local function handleCommand(str, ip, port)
   local ok, a = pcall(jsonDecode, str)

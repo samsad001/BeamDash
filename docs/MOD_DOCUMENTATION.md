@@ -1,6 +1,6 @@
-# BeamDash mod documentation (alpha 0.03)
+# BeamDash mod documentation (alpha 0.04)
 
-> What changed in each release: [`CHANGELOG.md`](../CHANGELOG.md).
+> **Upgrading from an earlier build?** The mod changed in alpha 0.04 (power / battery / damage data, watching other cars). Replace your installed copy with the new `BeamDash-mod.zip` (or copy the two `lua/…` files over an unpacked install) and restart BeamNG.
 
 BeamDash has two parts:
 
@@ -99,6 +99,8 @@ All data is sent only to the BeamDash server you run. Nothing goes to the intern
 | Data | Rate | Source in the game |
 |---|---|---|
 | Speed, rpm, gear, pedals, steering, temperatures, boost, fuel, lights, assists, cruise, odometer | 30 Hz | vehicle electrics + cruise control |
+| Engine & electric-motor power (kW) and torque (Nm), regen, traction battery (%, kWh) | 30 Hz | powertrain devices, energy storage |
+| Damage: total, damage-tracker flags, broken drivetrain parts, flat / broken wheels, deformed parts, engine state | 2 Hz | beamstate, damage tracker, powertrain, wheels |
 | G-forces, position, velocity, heading | 30 Hz | vehicle sensors / object |
 | Wheels: speed, slip, side slip, load, brake temps & torque, pressure, deflated / broken | 15 Hz | wheel rotators |
 | Every electrics value (~200) | 4 Hz | `electrics.values` |
@@ -108,7 +110,9 @@ All data is sent only to the BeamDash server you run. Nothing goes to the intern
 | All vehicles' positions, GPS route, ADAS state, speed limit, time of day, pause | 10 Hz | game engine |
 | Road network of the level | on level load / on request | navigation graph |
 
-Only the car you're driving streams vehicle data. Traffic and parked cars stay quiet.
+Only the car you're driving streams vehicle data, plus **one watched car** if a screen asked to watch it (see below). All other traffic and parked cars stay quiet.
+
+**What the server derives from this** (no extra game load): the trip computer, eco score, launch / braking timer, lap timer (from your car's position), drift angle (heading vs. direction of travel), virtual dyno (power and torque per rpm at full throttle), crash detection (g spikes) and achievements.
 
 ---
 
@@ -127,6 +131,12 @@ Sent from the web app, the Deck, or a macro URL.
 | Tuning | apply the car's tuning variables (the car respawns, like the in-game Tuning menu) |
 | Navigation | set a GPS destination (snapped to the nearest road), clear route |
 | World | time of day, pause / resume |
+| Spectating | watch a vehicle by id (it starts streaming its live data), stop watching |
+
+Handled by the BeamDash server itself (no game command): lap start/finish line, resets for laps / performance / drift / dyno / trips, drive recording on/off, voice navigation on/off.
+
+### Watching another car
+Press 👁 next to a car on *Map & Nav* (or *Watch next car* on the Deck). The game-side extension tells that vehicle's Lua to start streaming, and every screen switches to its data: cluster, telemetry, HUD. *Back to my car* stops it. Your own trips, records and recordings only ever count your car.
 
 If a car lacks a feature (e.g. no drive modes), the command fails safely and the app shows a short message.
 
@@ -165,6 +175,11 @@ In BeamNG: Options → Other → **OutGauge**. Turn it on with IP = the server's
 | Cruise does nothing | Does the car have cruise control in the game (the stock Cruise Control UI app works)? Check the console for `cruise` errors. |
 | Map is empty | Map & Nav → *Reload map*. Large levels take a few seconds. |
 | "LuaSocket unavailable" in the console | That BeamNG build doesn't include the network library the mod needs; please report it. |
+| Energy page says "Combustion car" on an EV | The car's motor didn't report power; check the Telemetry → Power & energy card for `bd_` values and report the car. |
+| Damage page only shows a total | That game version doesn't expose the damage tracker / deform groups; the total and broken parts still work. |
+| Launch timer never says READY | Stop completely (below 1 km/h) for half a second. |
+| Lap never starts | Make sure the start/finish line crosses the road you drive on (it shows chequered on the map), then drive through it. |
+| No sound or voice | Browsers only allow audio after you've tapped the page once; check Customize → Sounds / Spoken navigation. |
 
 When asking for help, include the BeamNG version, your OS, and any console lines that mention `beamDash`.
 
@@ -177,5 +192,9 @@ When asking for help, include the BeamNG version, your OS, and any console lines
 **Multiplayer (BeamMP)?** Not tested. It reads the local player's vehicle, so it may work for your own car.
 
 **Does it work with modded cars?** Yes. Everything comes from standard game systems (electrics, powertrain, wheels). Cars without some systems just show fewer values.
+
+**Electric and hybrid cars?** Yes. A car with an electric motor and no engine is treated as an EV, a car with both as a hybrid. EV designs show a power / regen meter instead of a tachometer.
+
+**Where are my records saved?** On the server PC, in `data/`: `trips.json`, `perf.json` (launch times, laps per level), `fun.json` (dyno, drift, crashes, achievements) and `recordings/*.csv`. Delete a file to start that part fresh.
 
 **Is it safe to leave running?** The server only listens on your local network and has no login. Don't forward its ports to the internet.

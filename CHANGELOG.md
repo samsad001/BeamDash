@@ -4,95 +4,159 @@ Each release lists the changes to the **mod** (the Lua files inside BeamNG) and 
 
 ---
 
-## alpha 0.03 (2026-10-30)
+## alpha 0.04 (2026-10-30)
 
-**Mod: changed. Reinstall it** (`BeamDash-mod.zip`, or copy the two `lua/…` files over an unpacked install, then restart BeamNG).
+The biggest update yet.
 
-### Mod
+**Mod: changed. Reinstall it.**
+
+### New cluster designs (15, now 35 in total)
+| | US | Euro | Asian |
+|---|---|---|---|
+| 1 | **Pony S650 '24**: Mustang-style digital, with a retro **Fox-body '87** theme | **Neue Klasse '26**: BMW Panoramic iDrive-style strip across the windscreen base | **Tokyo VFD '86**: 80s JDM stair-step digital tach |
+| 2 | **Mid-Engine '20**: Corvette C8-style wide curved tach | **Bavaria M Track '24**: BMW M track view with converging shift lights and lap strip | **Synergy '16**: Prius-style hybrid display (CHG / ECO / PWR, EV mode, READY) |
+| 3 | **Volt Ridge EV '24**: electric pickup, power / regen meter | **Maranello '05**: yellow centre tach, F430 era | **Rotary '92**: RX-7 FD-style centre tach and 3-gauge stack |
+| 4 | **Super Sport '69**: ribbon speedometer, woodgrain | **Zuffen EV '20**: Taycan-style EV power meter | **Godzilla '09**: R35 GT-R-style tach with multi-function meter |
+| 5 | **Lux Digital '21**: Cadillac / Lincoln-style luxury digital | **Sindelfingen '89**: Mercedes W124-style three-dial | **Seoul EV '22**: Ioniq 5 / EV6-style, dark or light theme |
+
+New **1960s** era in the design picker.
+
+### EV and hybrid support
+- The mod now reports engine and electric-motor **power (kW) and torque**, **regeneration**, and the **traction battery** (%, kWh).
+- Cars are detected as **combustion, hybrid or electric** automatically (Garage shows which).
+- New **Energy flow** info page: engine / motor / battery / wheels with animated power flow, and a CHG–ECO–PWR meter.
+- Trip computer tracks **kWh used, kWh regenerated and kWh/100 km**.
+- 5 designs with EV / hybrid power meters (Volt Ridge, Zuffen, Seoul, Synergy, Lux).
+
+### Performance and track
+- **Performance timer**: stop, then launch. 0–60 mph, 0–100 km/h, 0–200 km/h, 100–200 km/h, ⅛ and ¼ mile (with trap speed), 100–0 km/h and 60–0 mph braking distance. Last and best results, saved. The run ends when you lift off, brake or slow down.
+- **Lap timer**: set a start/finish line at your car or by tapping a road on the map. Lap and 3 sector times, a live **gap-to-best bar**, best lap and history per level.
+- **Drift meter**: drift angle, live score (angle × speed × time, bonus for long drifts), last and best.
+- **Virtual dyno**: power and torque curves recorded at full throttle, per car.
+- **Crash detector**: impacts over 4 g are logged with speed, peak g and damage added.
+- **Achievements**: 15 to unlock (first km, the ton, 0-100 under 5 s, ¼ mile under 12 s, drift king, airtime, crash test dummy, eco hero, night owl…).
+
+### New pages
+- **Records**: performance, laps, drift, dyno chart, eco scores, drive recordings, achievements, crash log.
+- **HUD**: big minimal speed / gear / limit / nav / lap gap, optionally **mirrored** for a windscreen reflection, 4 colours.
+- **OBS overlay** (`/hud?obs=1`): transparent 1920×1080 stream overlay with speed, gear, revs, pedals, G, plus lap / drift / launch chips.
+- **Connect**: QR codes for every address of the server, choose which page the code opens.
+
+### Cluster
+- **Portrait screens** (e.g. a 1080×1920 side monitor): cluster on top, two large info pages below (the flip-through page plus one you pin).
+- 6 new info pages: Energy flow, Performance timer, Lap timer, Drift meter, Virtual dyno, Damage (16 in total). Pages can be switched off in Customize.
+- **Chimes & alerts**: speed warning at a speed you choose, over-the-speed-limit alert (with tolerance), low fuel / battery chime, shift beep, crash and achievement sounds, big on-screen warning banners.
+- **Automatic night dimming** from the in-game clock.
+- **Spoken navigation**: "In 300 metres, turn left…" (miles/feet in mph mode). Toggle in Customize, from the Deck, or with a macro.
+- **Eco score** (0–100) on the economy page.
+
+### Watching other cars
+- 👁 **Watch** any car (AI traffic, a parked car) from Map & Nav, the Deck or a macro: its live data streams to every screen. "Back to my car" returns.
+
+### Damage
+- New **Damage** info page and Telemetry card: total damage, damage-tracker flags (engine, radiator, etc.), broken drivetrain parts, flat or broken wheels, deformed parts, plus a car outline with damaged areas.
+
+### Recording
+- **Drive recorder**: 10 samples per second to CSV (speed, rpm, gear, pedals, steering, G, position, fuel, temps, boost, engine / motor kW, battery, odometer). Start / stop from Records, the Deck or a macro; download or delete from Records.
+
+### Macros & Deck
+- New actions: set / remove lap line, reset laps / performance / drift / dyno, start/stop recording, watch next car, back to my car, voice navigation on/off.
+- New default Deck page **Track & tools**.
+
+### Fixes
+- Cruise control uses BeamNG's `cruiseControl` vehicle extension (with controller fallback) and reports the real set speed (introduced in 0.03).
+- Pop-ups are opaque (gauge glow no longer shows through).
+- Trip computer table columns line up.
+- Demo car comes to a full stop with the parking brake (needed for the launch timer).
+
+### Mod changes (re-install the mod!)
 - `beamDashVeh.lua`
-  - **Cruise control fixed.** It now uses BeamNG's `cruiseControl` vehicle *extension* (loading it if needed), and only falls back to a `cruiseControl` controller. In 0.01 and 0.02 the mod only looked for the controller, which cars don't have, so every cruise button did nothing.
-  - Cruise state (on/off and set speed) is read from the extension's `getConfiguration` and sent as `cruiseControlActive` / `cruiseControlTarget`, so the cluster shows the real set speed.
-  - *Resume* re-applies the last set speed (the extension can forget it when switched off).
-  - New `cruiseSetSpeed()` function the game-side extension calls.
-  - Clear error ("this car has no cruise control") when a car really has none.
-- `beamDash.lua`: adaptive cruise and *set speed* now go through `beamDashVeh.cruiseSetSpeed` instead of the controller.
+  - New live fields at 30 Hz:
+    - `bd_engTorque` and `bd_engPower` (kW).
+    - `bd_motorTorque` and `bd_motorPower` (kW, negative = regeneration).
+    - `bd_hasEngine` and `bd_hasMotor`.
+    - `bd_battery` (%), `bd_batteryKwh` and `bd_batteryCapKwh`, read from the electric energy storage.
+  - New `dmg` message at 2 Hz:
+    - total damage and the damage-tracker flags;
+    - broken drivetrain devices, and flat or broken wheels;
+    - deformed parts, and whether the engine is stalled or disabled.
+  - Engine spec reports `hybrid` (engine and motor both present).
+  - A car can be **watched**: it then streams like the player's car (`setWatched`).
+  - Keeps the 0.03 cruise-control fix.
+- `beamDash.lua`: new `watch` command (start / stop streaming another vehicle); the world message includes `watched`.
 
-### Server
-- No changes.
+### Server changes
+- **New `version.js`:** the version ("alpha 0.04"), shown in the app's top bar and in `/api/state`.
+- **New `perf.js`, performance and lap timer:**
+  - Launch runs (0-60 mph, 0-100, 0-200, 100-200 km/h, ⅛ / ¼ mile with trap speed).
+  - Braking runs (100-0 km/h, 60-0 mph).
+  - A lap line per level, with crossing detection, 3 sectors, gap to best and lap history.
+  - Saved in `data/perf.json`.
+- **New `fun.js`:** virtual dyno (per car), drift scoring, crash detection (over 4 g), airtime, distance and night-driving totals, and 15 achievements. Saved in `data/fun.json`.
+- **New `recorder.js`:** 10 Hz CSV drive recordings in `data/recordings/` (filenames are checked, so no path tricks).
+- `trips.js`: eco score (0–100), kWh used, kWh regenerated and kWh/100 km.
+- `actions.js`:
+  - New server-side actions: set / clear lap line, reset laps / performance / drift / dyno, start / stop recording, watch next car, back to my car.
+  - New UI actions: voice navigation on / off, cluster hold.
+- `server.js`
+  - A watched car's data goes to every screen but never counts toward your trips, records or recordings.
+  - Damage is cached for new screens.
+  - Live events `perf` (5 Hz), `fun` (2 Hz) and `toast` (achievements, crashes).
+  - New endpoints `/api/info`, `/api/recordings`, and `/api/recordings/<file>` (download or delete).
+  - Status includes version, recording and watched car.
+- `demo.js`: the demo car is now a mild hybrid with a battery and regeneration. It also sends damage, can be watched, and stops fully with the parking brake.
 
-### Web app
-- Link straight to a look: `/?design=<id>&page=<page>&clean=1` (`clean` hides all controls, for screenshots, OBS or a kiosk tablet).
-- Pop-up info pages have a solid background, so gauge glow no longer shows through.
-- Trip computer table on Telemetry: number columns line up.
+### Known issue (fixed in alpha 0.04-2)
+18 lines of `public/js/designs.js` that alpha 0.02 and 0.03 have were accidentally left out of this build:
+- On **Bavaria M '98** (E46 style), the check-control line shows the time and economy instead of the info page you flipped to.
+- The **Custom Builder** has no *Pages* centre option.
 
-### Docs and images (new)
-- `docs/MOD_DESCRIPTION.md` (repository / forum text, plain and BBCode), `docs/MOD_DOCUMENTATION.md` (install, network, data, commands, assists, troubleshooting, FAQ), `docs/TECHNICAL.md` (architecture, protocol, algorithms, APIs).
-- `media/`: banner, designs collage, `promo.html` source and screenshots of every design and page.
+Both are fixed in alpha 0.04-2.
 
 ---
+
+## alpha 0.03 (2026-10-30)
+**Mod changed** (cruise-control fix).
+
+- **Mod:**
+  - `beamDashVeh.lua` uses the `cruiseControl` vehicle extension (with controller fallback).
+  - It reports the real cruise state and set speed, remembers the last set speed for *resume*, and adds a new `cruiseSetSpeed()`.
+  - `beamDash.lua` drives ACC through it.
+- **Server:** no changes.
+- **Web app:**
+  - `/?design=&page=&clean=1` links.
+  - Opaque pop-ups.
+  - An aligned trip table.
+- **New:** `docs/` (mod description, documentation, technical write-up) and `media/` (stock images and screenshots).
 
 ## alpha 0.02 (2026-10-30)
+**Mod: no changes.**
 
-**Mod: no changes** (same Lua as 0.01, so no reinstall needed).
-
-### Server
-- **New `actions.js`:** about 50 named actions, each with its own URL `/api/action/<id>` for Stream Deck, Companion, Touch Portal, curl or keyboard shortcuts. `/api/actions` lists them.
-  - Toggles (cruise, parking brake, ADAS settings, following distance 1→4) are worked out on the server from the current state, so one URL works as a toggle.
-  - Hold actions (horn) take `?state=up` to release. Cruise ± takes `step` and `unit` (km/h or mph).
-- **New `trips.js`, trip computer:** Trip A, Trip B, Since start and a resettable Economy counter (distance, drive time, engine time, average and max speed, fuel used, L/100 km). Saved to `data/trips.json` every 10 s. *Since start* resets when you spawn a different car. The demo car uses its own throw-away counters.
-- **New `media.js`, now playing:** reads `playerctl` once a second (title, artist, album, art, position) and sends play / pause / next / previous. `/api/media/art` serves only the current track's album art.
-- `server.js`
-  - New endpoints `/api/action/<id>`, `/api/actions`, `/api/deck` (GET / PUT, saved in `data/deck.json`) and `/api/media/art`.
-  - New live events: `trips`, `media`, `ui` (flip pages on every screen) and `deck`.
-  - ADAS settings are saved in `data/settings.json` and sent back to the game when it reconnects.
-- `beamdash.service` is now a systemd **user** unit, so the server can reach the desktop's media player.
-
-### Web app
-- **Info pages (multi-function display)**, flipped with ◀ OK ▶, swipes, keys, the Deck or macros: Trip, Economy, Now playing, Navigation, Driver assist, Digital speed, Tires, G-force, Engine, Vehicle & service. Hold OK to reset a trip.
-  - Shown on each design's own screen, in the check-control line on the E46-style design, or as a pop-up on classic designs.
-- **4 new designs (20 total):** Bavaria Black Panel '12, Stuttgart Five-Dial '19, Neo Skyline '99, Heartland Pickup '19.
-- Nicer gauges: needle shadows and caps, glass reflections, per-design page colours, and more polish on the existing designs.
-- **Deck page** (`/deck`): a button pad for a second phone, with editable pages.
-- **Macros page** (`/macros`): every action's URL, ready to copy, plus keyboard bindings.
-- Telemetry shows the trip computer.
-
-
-### Known issues
-- Cruise control does nothing in-game (fixed in 0.03).
-
----
+- **Server:**
+  - New `actions.js`: about 50 actions with URLs, `/api/action/<id>` and `/api/actions`.
+  - New `trips.js`: Trip A / B / Since start / Economy, saved in `data/trips.json`.
+  - New `media.js`: now playing via playerctl, plus `/api/media/art`.
+  - `/api/deck` (saved in `data/deck.json`).
+  - SSE events `trips`, `media`, `ui` and `deck`.
+  - ADAS settings saved in `data/settings.json` and restored when the game reconnects.
+  - systemd **user** unit.
+- **Web app:**
+  - 10 info pages with ◀ OK ▶ (hold to reset).
+  - 4 new designs (20 total).
+  - Needle shadows, caps and glass.
+  - Deck page and Macros page.
+- **Known issue:** cruise control does nothing in-game (fixed in 0.03).
 
 ## alpha 0.01 (2026-10-30, first build)
 
-### Mod (new)
-- `beamDashVeh.lua` (inside every car; only the car you drive streams)
-  - Electrics at 30 Hz (speed, rpm, gear, pedals, temperatures, boost, fuel, lights, assists, odometer), G-forces, position, velocity, heading.
-  - Every electrics value at 4 Hz, wheels at 15 Hz, powertrain devices and fuel / battery tanks at 4 Hz, engine / gearbox spec every 5 s.
-  - Car commands: lights, signals, hazard, horn, fog, cruise, ESC, drive modes, engine start / off, gears, parking brake, repair, refuel.
-- `beamDash.lua` (game side)
-  - World message at 10 Hz: all vehicles, GPS route, ADAS state, speed limit, time of day, pause.
-  - Road network of the level, sent in 48 kB chunks. Car info and tuning variables on spawn.
-  - Driver assists: lead car, forward collision warning, emergency braking, adaptive cruise, blind spot, speed-limit signs.
-  - Navigation, applying tuning, time of day, pause.
-  - "Hello" discovery so the server can run on another PC. Optional `settings/beamDash.json`.
-- `modScript.lua` loads the game-side extension.
 
-### Server (new)
-- `server.js`
-  - Receives the mod's data on UDP 4445 and sends commands on 4446. OutGauge fallback on 4444.
-  - Reassembles chunked messages (16 MB receive buffer, because Windows dropped bursts).
-  - Keeps the latest state for new browsers, and serves the live stream (`/api/stream`), commands (`/api/cmd`), the map (`/api/map`), a debug snapshot (`/api/state`) and the web app.
-  - Options `--port`, `--game-host`, `--telemetry-port`, `--game-cmd-port`, `--outgauge-port`, `--demo`.
-- `demo.js`: a demo car on a 3.6 km circuit with 3 traffic cars, used until the game connects.
-
-### Web app (new)
-- **Cluster** with 16 designs, 1970s to 2026 (US, Euro, Japanese, race and Custom Builder). Each is customizable (colours, units, redline, shift light, brightness, 30/60 fps). Start-up needle sweep, warning lights, 3-D surround view, Drive Assist panel.
-- **Telemetry**, **Map & Nav** (tap to navigate) and **Garage** (specs, tuning sliders, repair, refuel, time of day).
-- Installable as an app (PWA) on iPhone, iPad, Android and desktop.
-
-### Scripts
-- `start-server.bat` / `.sh`, `install-mod.ps1` / `.sh` (finds native, Proton or Flatpak installs) and `beamdash.service` (system unit), plus the README.
-
-### Known issues
-- Cruise control (and adaptive cruise) does nothing in-game (fixed in 0.03).
-- The mod only runs if `lua/` and `scripts/` sit directly in the mod folder. This was found in the first live test, when the whole project folder had been put in `mods`.
+- **Mod:**
+  - Vehicle-side streaming: electrics 30 Hz, all electrics and powertrain 4 Hz, wheels 15 Hz, spec 5 s.
+  - Car commands.
+  - Game side: world 10 Hz, chunked road network, car info / tuning, ADAS (lead car, FCW, AEB, ACC, BSM, speed limits), navigation, time of day, pause, hello discovery.
+- **Server:**
+  - UDP 4445 in / 4446 out, OutGauge fallback on 4444, chunk reassembly, state cache.
+  - `/api/stream`, `/api/cmd`, `/api/map`, `/api/state`.
+  - Demo car.
+- **Web app:** 16 designs, Telemetry, Map & Nav, Garage, Drive Assist panel, installable as an app.
+- **Known issue:** cruise control does nothing in-game (fixed in 0.03).

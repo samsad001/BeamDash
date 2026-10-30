@@ -41,6 +41,7 @@
     P = MapView.draw(c, 0, 0, w, h, {
       cx: view.cx, cy: view.cy, scale: view.scale, rot: view.rot, anchorY: view.follow && view.headUp ? 0.65 : 0.5,
       theme: view.theme, route: d.route, vehicles: MapView.liveVehicles(d), myId: d.myId, dest, meSize: 18, otherSize: 11,
+      lapLine: BD.st.perf && BD.st.perf.lap && BD.st.perf.lap.line, watched: d.watching,
     });
     // north arrow + scale bar
     c.save();
@@ -115,6 +116,26 @@
     BD.toast(r && r.ok ? 'Route requested — follow the blue line' : 'Could not set route');
     setTimeout(() => { dest = null; }, 4000);
   };
+  // lap start/finish line: across the nearest road at the tapped point
+  $('lapHere').onclick = async () => {
+    pop.classList.remove('show');
+    const m = MapView.map;
+    if (!m || !popWorld) { BD.toast('Map not loaded yet', true); return; }
+    let best = null, bd = Infinity;
+    for (const e of m.edges) {
+      const a = m.nodes[e[0]], b = m.nodes[e[1]];
+      const dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((popWorld[0] - a[0]) * dx + (popWorld[1] - a[1]) * dy) / len2));
+      const px = a[0] + dx * t, py = a[1] + dy * t;
+      const dist = Math.hypot(popWorld[0] - px, popWorld[1] - py);
+      if (dist < bd) { bd = dist; best = { px, py, dx, dy, r: (a[3] + b[3]) / 2 }; }
+    }
+    if (!best || bd > 60) { BD.toast('Tap closer to a road', true); return; }
+    const l = Math.hypot(best.dx, best.dy) || 1, half = Math.max(10, best.r * 1.8);
+    const nx = -best.dy / l, ny = best.dx / l;
+    const r = await BD.cmd('lapLine', { x1: best.px - nx * half, y1: best.py - ny * half, x2: best.px + nx * half, y2: best.py + ny * half });
+    BD.toast(r && r.ok ? 'Start/finish line set: drive through it to start a lap' : 'Could not set the line');
+  };
   $('clearRoute').onclick = () => BD.cmd('navClear');
   $('reloadMap').onclick = () => { BD.cmd('getMap'); setTimeout(() => MapView.load(), 1500); BD.toast('Asking the game for the road network…'); };
 
@@ -148,7 +169,18 @@
     const me = MapView.me(d);
     const vl = $('vlist');
     const list = (w.vehicles || []).map((v) => ({ ...v, dist: me ? Math.hypot(v.x - me.x, v.y - me.y) : 0 })).sort((a, b) => a.dist - b.dist);
-    vl.innerHTML = list.map((v) => `<button class="btn small" data-x="${v.x}" data-y="${v.y}"><span>${v.me ? '★ You' : '#' + v.id}</span><span class="muted">${v.me ? '' : U.shortDist(v.dist) + ' · '}${Math.round(U.speed(v.spd))} ${U.speedLabel()}</span></button>`).join('');
-    vl.querySelectorAll('button').forEach((b) => (b.onclick = () => { setFollow(false); view.cx = +b.dataset.x; view.cy = +b.dataset.y; view.scale = Math.max(view.scale, 1); }));
+    const watched = w.watched || null;
+    const html = (watched ? '<button class="btn small on" data-watch="off" style="justify-content:center">◀ Back to my car</button>' : '') +
+      list.map((v) => `<div style="display:flex;gap:6px"><button class="btn small" style="flex:1" data-x="${v.x}" data-y="${v.y}"><span>${v.me ? '★ You' : '#' + v.id}</span><span class="muted">${v.me ? '' : U.shortDist(v.dist) + ' · '}${Math.round(U.speed(v.spd))} ${U.speedLabel()}</span></button>${v.me ? '' : `<button class="btn small ${watched === v.id ? 'on' : ''}" data-watch="${v.id}" title="Watch this car's live data">👁</button>`}</div>`).join('');
+    if (vl._h !== html) {
+      vl._h = html;
+      vl.innerHTML = html;
+      vl.querySelectorAll('[data-x]').forEach((b) => (b.onclick = () => { setFollow(false); view.cx = +b.dataset.x; view.cy = +b.dataset.y; view.scale = Math.max(view.scale, 1); }));
+      vl.querySelectorAll('[data-watch]').forEach((b) => (b.onclick = () => {
+        const vid = b.dataset.watch === 'off' || watched === +b.dataset.watch ? null : +b.dataset.watch;
+        BD.cmd('watch', { vid });
+        BD.toast(vid ? `Watching #${vid}` : 'Back to your car');
+      }));
+    }
   }, 500);
 })();

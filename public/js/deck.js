@@ -30,6 +30,10 @@
     'trip-a-reset': { glyph: 'A↺', label: 'Reset trip A' }, 'trip-b-reset': { glyph: 'B↺', label: 'Reset trip B' },
     'economy-reset': { glyph: '⛽↺', label: 'Reset economy' }, 'start-reset': { glyph: '↺', label: 'Reset journey' },
     'media-play-pause': { glyph: '⏯', label: 'Play / pause', col: '#2f9bff' }, 'media-next': { glyph: '⏭', label: 'Next' }, 'media-prev': { glyph: '⏮', label: 'Previous' },
+    'perf-reset': { glyph: '⏱↺', label: 'Reset 0-100' }, 'lap-line-here': { glyph: '🏁', label: 'Start/finish here' }, 'lap-line-clear': { glyph: '🏁✕', label: 'Remove line' },
+    'lap-reset': { glyph: '⏱', label: 'Reset laps' }, 'drift-reset': { glyph: '↯↺', label: 'Reset drift' }, 'dyno-reset': { glyph: '📈↺', label: 'Reset dyno' },
+    'record-toggle': { glyph: '⏺', label: 'Record drive', col: '#ff3b30' }, 'watch-next': { glyph: '👁', label: 'Watch next car', col: '#c07aff' },
+    'watch-off': { glyph: '★', label: 'Back to my car' }, 'voice-toggle': { glyph: '🗣', label: 'Voice nav', col: '#27e05a' },
   };
   const COLORS = ['', '#4aa3ff', '#27e05a', '#ffb000', '#ff3b30', '#c07aff', '#00e5ff', '#ffffff'];
 
@@ -37,6 +41,7 @@
     pages: [
       { name: 'Drive', cols: 3, buttons: ['signal-left', 'hazard', 'signal-right', 'high-beam', 'lights-cycle', 'fog', 'cruise-toggle', 'cruise-set', 'cruise-resume', 'cruise-minus', 'acc-gap', 'cruise-plus', 'horn', 'parking-brake', 'drive-mode', 'cluster-prev', 'cluster-ok', 'cluster-next'].map((a) => ({ action: a })) },
       { name: 'Car & media', cols: 3, buttons: ['media-prev', 'media-play-pause', 'media-next', 'acc-toggle', 'fcw-toggle', 'bsm-toggle', 'esc-mode', 'aeb-toggle', 'tsr-toggle', 'trip-a-reset', 'trip-b-reset', 'economy-reset', 'engine-start', 'engine-off', 'repair', 'refuel', 'nav-clear', 'design-next'].map((a) => ({ action: a })) },
+      { name: 'Track & tools', cols: 3, buttons: ['lap-line-here', 'lap-reset', 'lap-line-clear', 'perf-reset', 'drift-reset', 'dyno-reset', 'record-toggle', 'watch-next', 'watch-off', 'voice-toggle', 'pause', 'repair'].map((a) => ({ action: a })) },
     ],
   };
   let deck = null, actions = [], pageIdx = 0, editing = false, editIdx = -1;
@@ -86,6 +91,12 @@
         return { val: action === 'economy-reset' ? (t.avgCons ? `${U.consumption(t.avgCons).toFixed(1)}` : '') : `${U.dist(t.dist || 0).toFixed(1)} ${U.distLabel()}` };
       }
       case 'cluster-ok': return { val: '' };
+      case 'record-toggle': return { on: !!(BD.st.status && BD.st.status.recording), blink: true };
+      case 'watch-next': return { on: !!d.watching, val: d.watching ? `#${d.watching}` : '' };
+      case 'voice-toggle': return { on: !!BD.settings.voice };
+      case 'lap-line-here': { const lp = (BD.st.perf || {}).lap || {}; return { on: !!lp.line, val: lp.running ? `${(BD.lapNow() || 0).toFixed(1)} s` : '' }; }
+      case 'perf-reset': { const pf = BD.st.perf || {}; return { on: pf.state === 'ready', val: pf.state === 'ready' ? 'READY' : pf.best && typeof pf.best.t100 === 'number' ? `${pf.best.t100.toFixed(2)} s` : '' }; }
+      case 'drift-reset': { const dr = (BD.st.fun || {}).drift || {}; return { val: dr.best ? String(dr.best) : '' }; }
     }
     return {};
   }

@@ -504,8 +504,6 @@ window.DESIGNS = (() => {
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff2414' },
       { k: 'warmup', label: 'Warm-up redline', type: 'bool', def: true },
     ],
-    mfd: () => ({ line: true }), // pages show in the check-control LCD
-    mfdTheme: { accent: '#ff7a2a', fg: '#ffd7b0', dim: 'rgba(255,170,110,.6)', font: 'Barlow Condensed', line: 'rgba(255,122,42,.2)' },
     draw(c, d, k) {
       const o = k.o, il = o.illum;
       c.fillStyle = '#030303'; c.fillRect(0, 0, 1600, 600);
@@ -553,17 +551,11 @@ window.DESIGNS = (() => {
       c.fillStyle = '#0a0703'; rrect(c, 580, 470, 440, 70, 8); c.fill();
       c.strokeStyle = '#2a1a08'; c.lineWidth = 2; c.stroke();
       const msgs = checkMessages(d);
-      // warnings first, otherwise the on-board computer page you flipped to (like the real check-control display)
-      const msg = msgs.length ? msgs[Math.floor(k.t / 3) % msgs.length] : MFD.line(d);
-      c.save();
-      c.beginPath(); c.rect(588, 474, 424, 62); c.clip();
-      const size = msg.length > 26 ? 21 : 27;
-      text(c, msg, 800, 506, size, msgs.length ? '#ff9a3a' : il, 'center', 'Orbitron', 500);
-      c.restore();
-      // dot-matrix look: horizontal mask lines over the text
+      const msg = msgs.length ? msgs[Math.floor(k.t / 3) % msgs.length] : `${BD.clock(d.tod)}    ${U.speed(d.speed) > 1 ? econ(d).toFixed(1) + ' L/100' : 'READY'}`;
+      // dot-matrix look: draw text then a dot mask
+      text(c, msg, 800, 506, 30, msgs.length ? '#ff9a3a' : il, 'center', 'Orbitron', 500);
       c.fillStyle = 'rgba(10,7,3,.55)';
       for (let yy = 476; yy < 540; yy += 4) c.fillRect(584, yy, 432, 1.4);
-      text(c, MFD.page.name.toUpperCase(), 800, 556, 13, 'rgba(255,122,42,.5)', 'center', 'Orbitron', 500);
     },
   });
 
@@ -1327,6 +1319,619 @@ window.DESIGNS = (() => {
     },
   });
 
+  // =============================================================== alpha 0.04 designs
+  // EV / hybrid power meter: regen (green) below zero, power up to 100 % of the car's peak
+  function powerDial(c, d, x, y, r, o = {}) {
+    const pct = clamp((d.isEV || d.isHybrid ? d.motorKw + Math.max(0, d.engKw) : Math.max(0, d.engKw)) / d.maxPowerKw * 100, -30, 100);
+    const a0 = o.a0 ?? 0.75 * PI, a1 = o.a1 ?? 2.25 * PI;
+    const ang = (v) => a0 + (v + 30) / 130 * (a1 - a0);
+    c.save();
+    c.lineCap = 'butt';
+    c.lineWidth = o.w || r * 0.1;
+    c.strokeStyle = o.track || 'rgba(255,255,255,.08)';
+    c.beginPath(); c.arc(x, y, r, a0, a1); c.stroke();
+    c.strokeStyle = 'rgba(43,212,106,.25)';
+    c.beginPath(); c.arc(x, y, r, a0, ang(0)); c.stroke();
+    if (Math.abs(pct) > 0.5) {
+      c.strokeStyle = pct < 0 ? '#2bd46a' : (o.color || '#4aa3ff');
+      glow(c, c.strokeStyle, 14);
+      c.beginPath(); c.arc(x, y, r, Math.min(ang(0), ang(pct)), Math.max(ang(0), ang(pct))); c.stroke();
+      noGlow(c);
+    }
+    for (const v of [-30, 0, 25, 50, 75, 100]) {
+      const a = ang(v);
+      text(c, v === -30 ? 'CHG' : String(v), x + Math.cos(a) * r * 0.8, y + Math.sin(a) * r * 0.8, r * 0.09, v < 0 ? '#2bd46a' : (o.label || 'rgba(255,255,255,.6)'), 'center', o.font || 'Rajdhani', 700);
+    }
+    c.restore();
+    return pct;
+  }
+  const levelPct = (d) => Math.round((d.isEV && d.battery !== null ? d.battery : d.fuel) * 100);
+
+  // ---------------- US ----------------
+  reg({
+    id: 'ponyS650', name: "Pony S650 '24", era: '2020s', region: 'US', inspired: 'Ford Mustang S650 digital cluster (with retro Fox-body mode)',
+    opts: [
+      { k: 'theme', label: 'Theme', type: 'select', options: ['modern', 'fox87'], def: 'modern' },
+      { k: 'accent', label: 'Accent', type: 'color', def: '#2f8bff' },
+    ],
+    mfd: (o) => (o.theme === 'fox87' ? null : { x: 1110, y: 70, w: 450, h: 470, theme: { accent: o.accent || '#2f8bff', bg: 'rgba(10,16,28,.8)' } }),
+    mfdTheme: { bg: 'rgba(0,0,0,.95)', accent: '#ff7a1a', fg: '#9dff9d', dim: 'rgba(157,255,157,.6)', font: 'Orbitron', line: 'rgba(157,255,157,.15)' },
+    draw(c, d, k) {
+      const a = accent(k, '#2f8bff');
+      if (k.o.theme === 'fox87') {
+        // 1987 Fox-body throwback: straight horizontal scales with sliding orange needles
+        c.fillStyle = '#050505'; c.fillRect(0, 0, 1600, 600);
+        const strip = (y, max, step, val, label, fmt) => {
+          c.fillStyle = '#0b0b0b'; rrect(c, 80, y - 70, 1440, 140, 14); c.fill();
+          c.strokeStyle = '#1e1e1e'; c.lineWidth = 3; c.stroke();
+          for (let v = 0; v <= max; v += step / 2) {
+            const x = 140 + v / max * 1320, major = Math.abs(v / step - Math.round(v / step)) < 1e-6;
+            c.fillStyle = '#e8e8e8'; c.fillRect(x - (major ? 2 : 1), y - 30, major ? 4 : 2, major ? 34 : 18);
+            if (major) text(c, fmt(v), x, y + 30, 26, '#e8e8e8', 'center', 'Barlow Condensed', 600);
+          }
+          text(c, label, 110, y - 52, 18, '#9dff9d', 'left', 'Orbitron', 600);
+          const nx = 140 + clamp(val / max, 0, 1) * 1320;
+          glow(c, '#ff7a1a', 12); c.fillStyle = '#ff7a1a'; c.fillRect(nx - 4, y - 58, 8, 80); noGlow(c);
+        };
+        const [smax] = sScale([240], [140]);
+        strip(150, smax, mph() ? 20 : 20, spd(d), mph() ? 'MPH' : 'KM/H', String);
+        strip(350, kmax(d), 1, d.rpm / 1000, 'RPM x1000', String);
+        text(c, `FUEL ${Math.round(d.fuel * 100)}%   TEMP ${Math.round(tempC(d))}°   OIL ${Math.round(oilP(d))} PSI   ${d.gear}`, 800, 520, 32, '#9dff9d', 'center', 'Orbitron', 600);
+        text(c, odoStr(d), 1450, 520, 26, '#e8e8e8', 'right', 'Orbitron', 500);
+        lightRow(c, d, 220, 520, 26, 6, { list: ['sigL', 'high', 'park', 'sigR'] });
+        return;
+      }
+      const bg = c.createLinearGradient(0, 0, 0, 600); bg.addColorStop(0, '#0a1322'); bg.addColorStop(1, '#03060b');
+      c.fillStyle = bg; c.fillRect(0, 0, 1600, 600);
+      // left: tach arc with segmented fill
+      const x = 360, y = 330, r = 240;
+      dial(c, { x, y, r, min: 0, max: kmax(d), major: 1, minor: 0.5, a0: 0.75 * PI, a1: 2.0 * PI, tickColor: 'rgba(255,255,255,.7)', labelColor: '#fff', labelSize: 30, labelR: 0.78, font: 'Rajdhani', weight: 700, red: { from: d.redFrom / 1000, r: 0.98, w: 0.04, color: '#ff2a2a' } });
+      arcSegs(c, x, y, r * 0.9, 26, 0.75 * PI, 2.0 * PI, 40, d.rpm / d.tachMax, (f) => (f * d.tachMax > d.redFrom ? '#ff2a2a' : a), 'rgba(255,255,255,.05)', 0.25);
+      text(c, gearMain(d), x, y + 10, 120, '#fff', 'center', 'Rajdhani', 700);
+      text(c, `${Math.round(d.rpm)} rpm`, x, y + 90, 22, 'rgba(255,255,255,.6)', 'center', 'Rajdhani', 600);
+      // centre: speed
+      text(c, Math.round(spd(d)), 820, 260, 170, '#fff', 'center', 'Rajdhani', 600);
+      text(c, U.speedLabel(), 820, 360, 28, 'rgba(255,255,255,.6)', 'center', 'Rajdhani', 600);
+      setSpeedChip(c, d, 720, 440, 34, a);
+      limit(c, d, 900, 445, 30);
+      bar(c, 650, 520, 340, 10, d.fuel, d.lights.lowFuel ? '#ffb000' : a, 'rgba(255,255,255,.1)', false, 5);
+      text(c, `${Math.round(d.fuel * 100)}%  ${rangeStr(d)}`, 820, 555, 20, 'rgba(255,255,255,.7)', 'center', 'Rajdhani', 600);
+      lightRow(c, d, 800, 36, 28, 8, { list: ['sigL', 'high', 'low', 'park', 'abs', 'esc', 'check', 'oil', 'battery', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'c8_20', name: "Mid-Engine '20", era: '2020s', region: 'US', inspired: 'Chevrolet Corvette C8 (sport view)',
+    opts: [{ k: 'accent', label: 'Accent', type: 'color', def: '#ffd21f' }],
+    mfd: (o) => ({ x: 1130, y: 170, w: 430, h: 380, theme: { accent: o.accent || '#ffd21f', bg: 'rgba(255,255,255,.04)' } }),
+    draw(c, d, k) {
+      const a = accent(k, '#ffd21f');
+      c.fillStyle = '#05060a'; c.fillRect(0, 0, 1600, 600);
+      // wide curved tach band across the top
+      const cx = 800, cy = 1180, r = 1040, a0 = 1.33 * PI, a1 = 1.67 * PI;
+      const km = kmax(d);
+      for (let v = 0; v <= km; v += 0.5) {
+        const an = a0 + v / km * (a1 - a0), major = v % 1 === 0;
+        c.strokeStyle = v * 1000 >= d.redFrom ? '#ff2a2a' : 'rgba(255,255,255,.7)'; c.lineWidth = major ? 4 : 2;
+        c.beginPath(); c.moveTo(cx + Math.cos(an) * (r + 4), cy + Math.sin(an) * (r + 4)); c.lineTo(cx + Math.cos(an) * (r + (major ? 30 : 16)), cy + Math.sin(an) * (r + (major ? 30 : 16))); c.stroke();
+        if (major) text(c, String(v), cx + Math.cos(an) * (r + 56), cy + Math.sin(an) * (r + 56), 26, '#fff', 'center', 'Rajdhani', 700);
+      }
+      arcBar(c, cx, cy, r - 22, 40, a0, a1, d.rpm / d.tachMax, d.rpm > d.redFrom ? '#ff2a2a' : a, 'rgba(255,255,255,.05)', { glow: a });
+      text(c, Math.round(spd(d)), 800, 330, 150, '#fff', 'center', 'Rajdhani', 700);
+      text(c, U.speedLabel(), 800, 420, 26, 'rgba(255,255,255,.6)', 'center', 'Rajdhani', 600);
+      c.strokeStyle = a; c.lineWidth = 3; rrect(c, 950, 260, 110, 110, 14); c.stroke();
+      text(c, gearMain(d), 1005, 318, 80, a, 'center', 'Rajdhani', 700);
+      // left vitals
+      const row = (y, l, v, f, warn) => {
+        text(c, l, 70, y, 20, 'rgba(255,255,255,.6)', 'left', 'Rajdhani', 600);
+        text(c, v, 470, y, 28, warn ? '#ff3a2a' : '#fff', 'right', 'Rajdhani', 700);
+        bar(c, 70, y + 18, 400, 6, f, warn ? '#ff3a2a' : a, 'rgba(255,255,255,.08)', false, 3);
+      };
+      row(220, 'OIL TEMP', `${Math.round(U.temp(d.oilT))}${U.tempLabel()}`, clamp((d.oilT - 40) / 110, 0, 1), d.oilT > 135);
+      row(300, 'COOLANT', `${Math.round(tempC(d))}${U.tempLabel()}`, waterFrac(d), d.water > 112);
+      row(380, 'OIL PRESS', `${Math.round(oilP(d))} psi`, oilP(d) / 90, false);
+      row(460, 'FUEL', `${Math.round(d.fuel * 100)}%`, d.fuel, d.lights.lowFuel);
+      setSpeedChip(c, d, 700, 500, 32, a);
+      limit(c, d, 890, 505, 28);
+      lightRow(c, d, 800, 575, 26, 8, { list: ['sigL', 'high', 'park', 'abs', 'esc', 'check', 'oil', 'battery', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'ridgeEV24', name: "Volt Ridge EV '24", era: '2020s', region: 'US', inspired: 'American electric pickups (Rivian / F-150 Lightning)',
+    opts: [{ k: 'accent', label: 'Accent', type: 'color', def: '#ffb000' }],
+    mfd: (o) => ({ x: 1120, y: 60, w: 440, h: 480, theme: { accent: o.accent || '#ffb000', bg: 'rgba(255,255,255,.04)' } }),
+    draw(c, d, k) {
+      const a = accent(k, '#ffb000');
+      const bg = c.createLinearGradient(0, 0, 1600, 0); bg.addColorStop(0, '#0e1210'); bg.addColorStop(1, '#050706');
+      c.fillStyle = bg; c.fillRect(0, 0, 1600, 600);
+      const pct = powerDial(c, d, 300, 320, 220, { color: a });
+      text(c, `${Math.round(pct)}%`, 300, 300, 70, '#fff', 'center', 'Rajdhani', 700);
+      text(c, pct < 0 ? 'REGEN' : 'POWER', 300, 360, 22, pct < 0 ? '#2bd46a' : a, 'center', 'Rajdhani', 700);
+      text(c, `${Math.round(d.motorKw + Math.max(0, d.engKw))} kW`, 300, 400, 24, 'rgba(255,255,255,.6)', 'center', 'Rajdhani', 600);
+      text(c, Math.round(spd(d)), 800, 240, 180, '#fff', 'center', 'Rajdhani', 600);
+      text(c, U.speedLabel(), 800, 345, 28, 'rgba(255,255,255,.6)', 'center', 'Rajdhani', 600);
+      gearRow(c, d, 800, 410, 34, '#fff', 'rgba(255,255,255,.2)', ['P', 'R', 'N', 'D'], 'Rajdhani');
+      // battery (or fuel on non-EVs)
+      const lvl = levelPct(d) / 100;
+      c.fillStyle = 'rgba(255,255,255,.08)'; rrect(c, 600, 470, 400, 44, 10); c.fill();
+      c.fillStyle = lvl < 0.15 ? '#ff3b30' : '#2bd46a'; rrect(c, 604, 474, 392 * clamp(lvl, 0, 1), 36, 8); c.fill();
+      c.fillStyle = 'rgba(255,255,255,.3)'; c.fillRect(1002, 482, 8, 20);
+      text(c, `${Math.round(lvl * 100)}%   ${rangeStr(d)}`, 800, 545, 24, '#fff', 'center', 'Rajdhani', 700);
+      limit(c, d, 640, 110, 30);
+      setSpeedChip(c, d, 700, 110, 32, a);
+      lightRow(c, d, 800, 36, 26, 8, { list: ['sigL', 'high', 'low', 'park', 'abs', 'esc', 'battery', 'tpms', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'ss69', name: "Super Sport '69", era: '1960s', region: 'US', inspired: 'Late-60s muscle car with ribbon speedometer', glass: true,
+    opts: [
+      { k: 'ribbon', label: 'Ribbon colour', type: 'color', def: '#ff3a1a' },
+      { k: 'panel', label: 'Panel', type: 'select', options: ['woodgrain', 'brushed'], def: 'woodgrain' },
+    ],
+    mfdTheme: { bg: 'rgba(14,10,6,.96)', accent: '#ff7a1a', font: 'Barlow Condensed' },
+    draw(c, d, k) {
+      const o = k.o;
+      if (o.panel === 'woodgrain') {
+        const g = c.createLinearGradient(0, 0, 0, 600); g.addColorStop(0, '#5a3418'); g.addColorStop(1, '#2a1708');
+        c.fillStyle = g; c.fillRect(0, 0, 1600, 600);
+        c.strokeStyle = 'rgba(0,0,0,.2)'; c.lineWidth = 2;
+        for (let i = 0; i < 40; i++) { c.beginPath(); c.moveTo(0, i * 16); c.bezierCurveTo(500, i * 16 + 18 * Math.sin(i * 1.3), 1100, i * 16 - 16 * Math.cos(i), 1600, i * 16 + 5); c.stroke(); }
+      } else {
+        c.fillStyle = '#262626'; c.fillRect(0, 0, 1600, 600);
+        for (let i = 0; i < 600; i += 3) { c.fillStyle = `rgba(255,255,255,${0.02 + 0.03 * Math.abs(Math.sin(i * 1.7))})`; c.fillRect(0, i, 1600, 1); }
+      }
+      // ribbon speedometer window
+      const [smax] = sScale([200], [120]);
+      c.fillStyle = '#0a0a0a'; rrect(c, 160, 60, 1280, 150, 75); c.fill();
+      c.strokeStyle = '#c9c9c9'; c.lineWidth = 8; rrect(c, 160, 60, 1280, 150, 75); c.stroke();
+      const x0 = 240, x1 = 1360;
+      c.fillStyle = o.ribbon; glow(c, o.ribbon, 10);
+      c.fillRect(x0, 120, (x1 - x0) * clamp(spd(d) / smax, 0, 1), 30); noGlow(c);
+      for (let v = 0; v <= smax; v += 10) {
+        const x = x0 + v / smax * (x1 - x0);
+        c.fillStyle = '#eee'; c.fillRect(x - 1.5, 100, 3, v % 20 === 0 ? 16 : 8);
+        if (v % 20 === 0) text(c, String(v), x, 175, 26, '#f2f2f2', 'center', 'Barlow Condensed', 700);
+      }
+      text(c, mph() ? 'MPH' : 'KM/H', 200, 135, 18, '#bbb', 'center', 'Barlow Condensed', 700);
+      // tach pod + small pods
+      const pod = (x, y, r) => { chrome(c, x, y, r, 10); c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#151515'); c.fill(); };
+      let x = 800, y = 400, r = 165;
+      pod(x, y, r);
+      const ang = dial(c, { x, y, r: r * 0.95, min: 0, max: kmax(d), major: 1, minor: 0.5, tickColor: '#eee', labelColor: '#f2f2f2', labelSize: r * 0.18, labelR: 0.68, weight: 700, red: { from: d.redFrom / 1000, r: 0.88, w: 0.1 } });
+      text(c, 'RPM x1000', x, y + r * 0.4, 16, '#aaa', 'center', 'Barlow Condensed', 700);
+      needle(c, x, y, ang(d.rpm / 1000), { len: r * 0.86, color: '#ff7a1a', w: r * 0.035, cap: r * 0.12, capColor: '#111', capRim: '#888' });
+      G.glass(c, x, y, r);
+      const small = (sx, frac, lo, hi, name, red) => {
+        pod(sx, 400, 110);
+        mini(c, sx, 420, 88, frac, { lo, hi, name, needle: '#ff7a1a', tick: '#ddd', label: '#ddd', font: 'Barlow Condensed', [red]: true, size: 22 });
+        G.glass(c, sx, 400, 110);
+      };
+      small(400, fuelFrac(d), 'E', 'F', 'FUEL', 'redStart');
+      small(1200, waterFrac(d), 'C', 'H', 'TEMP', 'redEnd');
+      const L = d.lights;
+      if (L.sigL) { glow(c, LIGHT.green, 14); icon(c, 'sigL', 560, 270, 44, LIGHT.green); noGlow(c); }
+      if (L.sigR) { glow(c, LIGHT.green, 14); icon(c, 'sigR', 1040, 270, 44, LIGHT.green); noGlow(c); }
+      lightRow(c, d, 800, 580, 24, 8, { list: ['high', 'park', 'oil', 'battery'] });
+    },
+  });
+
+  reg({
+    id: 'luxe21', name: "Lux Digital '21", era: '2020s', region: 'US', inspired: 'American luxury digital clusters (Cadillac / Lincoln)',
+    opts: [{ k: 'accent', label: 'Accent', type: 'color', def: '#c8a46a' }],
+    mfd: (o) => ({ x: 1110, y: 90, w: 440, h: 420, theme: { accent: o.accent || '#c8a46a', bg: 'rgba(200,164,106,.05)', font: 'Rajdhani', fg: '#f3ede4', dim: 'rgba(243,237,228,.55)' } }),
+    draw(c, d, k) {
+      const a = accent(k, '#c8a46a');
+      const bg = c.createRadialGradient(560, 300, 50, 560, 300, 900); bg.addColorStop(0, '#1a1712'); bg.addColorStop(1, '#050403');
+      c.fillStyle = bg; c.fillRect(0, 0, 1600, 600);
+      // left: thin power ring
+      const pct = powerDial(c, d, 230, 310, 160, { color: a, w: 8, label: 'rgba(243,237,228,.55)' });
+      text(c, `${Math.round(Math.max(0, pct))}%`, 230, 300, 46, '#f3ede4', 'center', 'Rajdhani', 500);
+      text(c, 'POWER', 230, 345, 16, a, 'center', 'Rajdhani', 700);
+      // centre: speed inside a fine ring with an rpm sweep
+      const x = 650, y = 300, r = 230;
+      c.strokeStyle = 'rgba(200,164,106,.35)'; c.lineWidth = 2; c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke();
+      arcBar(c, x, y, r - 14, 6, 0.75 * PI, 2.25 * PI, d.rpm / d.tachMax, a, 'rgba(255,255,255,.05)', { glow: a });
+      text(c, Math.round(spd(d)), x, y - 10, 140, '#f3ede4', 'center', 'Rajdhani', 500);
+      text(c, U.speedLabel(), x, y + 70, 24, 'rgba(243,237,228,.6)', 'center', 'Rajdhani', 600);
+      text(c, d.gear, x, y + 130, 40, a, 'center', 'Rajdhani', 700);
+      limit(c, d, x - 70, y - 160, 26);
+      setSpeedChip(c, d, x + 10, y - 160, 30, a);
+      text(c, `${BD.clock(d.tod)}   ${Math.round(d.fuel * 100)}%   ${rangeStr(d)}`, 650, 572, 20, 'rgba(243,237,228,.55)', 'center', 'Rajdhani', 600);
+      lightRow(c, d, 650, 30, 24, 8, { list: ['sigL', 'high', 'low', 'park', 'abs', 'esc', 'check', 'oil', 'sigR'] });
+    },
+  });
+
+  // ---------------- Euro ----------------
+  reg({
+    id: 'neueKlasse26', name: "Neue Klasse '26", era: '2020s', region: 'Euro', inspired: 'BMW Panoramic iDrive (2026): info strip across the windscreen base', adasNative: true,
+    opts: [
+      { k: 'accent', label: 'Accent', type: 'color', def: '#6fb6ff' },
+      { k: 'strip', label: 'Strip tint', type: 'select', options: ['clear', 'warm'], def: 'clear' },
+    ],
+    mfd: (o) => ({ x: 330, y: 250, w: 940, h: 320, theme: { accent: o.accent || '#6fb6ff', bg: 'rgba(255,255,255,.035)' } }),
+    draw(c, d, k) {
+      const a = accent(k, '#6fb6ff');
+      c.fillStyle = '#020306'; c.fillRect(0, 0, 1600, 600);
+      // the panoramic strip
+      const sg = c.createLinearGradient(0, 30, 0, 200);
+      sg.addColorStop(0, k.o.strip === 'warm' ? 'rgba(255,190,140,.10)' : 'rgba(140,190,255,.10)'); sg.addColorStop(1, 'rgba(255,255,255,.02)');
+      c.fillStyle = sg; rrect(c, 30, 30, 1540, 180, 40); c.fill();
+      c.strokeStyle = 'rgba(255,255,255,.08)'; c.lineWidth = 2; c.stroke();
+      limit(c, d, 110, 120, 42);
+      text(c, Math.round(spd(d)), 290, 118, 110, '#fff', 'center', 'Rajdhani', 600);
+      text(c, U.speedLabel(), 290, 182, 20, 'rgba(255,255,255,.5)', 'center', 'Rajdhani', 600);
+      gearRow(c, d, 470, 120, 30, '#fff', 'rgba(255,255,255,.18)', ['P', 'R', 'N', 'D'], 'Rajdhani');
+      // assist status
+      if (d.cruise.on) setSpeedChip(c, d, 600, 120, 34, a);
+      const adasCol = d.fcw ? (d.fcw === 2 ? '#ff2a1f' : '#ffb000') : 'rgba(255,255,255,.45)';
+      icon(c, 'acc', 760, 120, 40, d.adas && d.adas.acc ? a : 'rgba(255,255,255,.25)');
+      icon(c, 'fcw', 830, 120, 40, adasCol);
+      if (d.bsmL || d.bsmR) icon(c, 'bsm', 900, 120, 40, '#ffb000');
+      // navigation
+      const n = BD.navNext(d.route, d.pos);
+      if (n) {
+        navArrow(c, 1000, 120, 70, n.dir, a);
+        text(c, n.dir === 'arrive' ? 'Arriving' : U.shortDist(n.dist), 1050, 105, 40, '#fff', 'left', 'Rajdhani', 700);
+        text(c, `${U.shortDist(n.total)} to go`, 1050, 145, 20, 'rgba(255,255,255,.55)', 'left', 'Rajdhani', 600);
+      } else text(c, BD.clock(d.tod), 1080, 120, 44, '#fff', 'center', 'Rajdhani', 600);
+      // energy
+      const lvl = levelPct(d);
+      c.fillStyle = 'rgba(255,255,255,.1)'; rrect(c, 1300, 100, 180, 14, 7); c.fill();
+      c.fillStyle = lvl < 12 ? '#ffb000' : a; rrect(c, 1300, 100, 180 * lvl / 100, 14, 7); c.fill();
+      text(c, `${lvl}%  ${rangeStr(d)}`, 1390, 145, 22, '#fff', 'center', 'Rajdhani', 700);
+      // rpm / power as a hairline under the strip
+      const f = d.isEV ? clamp(d.motorKw / d.maxPowerKw, 0, 1) : d.rpm / d.tachMax;
+      c.fillStyle = 'rgba(255,255,255,.06)'; c.fillRect(70, 200, 1460, 4);
+      c.fillStyle = !d.isEV && d.rpm > d.redFrom ? '#ff2a2a' : a; c.fillRect(70, 200, 1460 * f, 4);
+      lightRow(c, d, 800, 232, 22, 10, { list: ['sigL', 'high', 'low', 'park', 'abs', 'esc', 'check', 'oil', 'battery', 'tpms', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'bavMTrack24', name: "Bavaria M Track '24", era: '2020s', region: 'Euro', inspired: 'BMW M curved display in track mode', adasNative: false,
+    opts: [{ k: 'accent', label: 'Accent', type: 'color', def: '#1c69d4' }],
+    mfd: (o) => ({ x: 1080, y: 160, w: 480, h: 400, theme: { accent: o.accent || '#1c69d4', bg: 'rgba(255,255,255,.04)', font: 'Rajdhani' } }),
+    draw(c, d, k) {
+      const a = accent(k, '#1c69d4');
+      c.fillStyle = '#030406'; c.fillRect(0, 0, 1600, 600);
+      // shift lights that close in from both ends, then flash
+      const lo = d.shiftRpm * 0.7, f = clamp((d.rpm - lo) / (d.shiftRpm - lo), 0, 1), n = 10;
+      const flash = d.rpm >= d.shiftRpm && Math.floor(k.t * 12) % 2 === 0;
+      for (let i = 0; i < n; i++) {
+        const lit = d.rpm >= d.shiftRpm ? flash : f * n > i;
+        const col = i < 4 ? '#1c69d4' : i < 7 ? '#6b2c91' : '#e4002b';
+        for (const side of [-1, 1]) {
+          const x = 800 + side * (700 - i * 66);
+          c.fillStyle = lit ? col : 'rgba(255,255,255,.06)';
+          if (lit) glow(c, col, 14);
+          rrect(c, x - 26, 30, 52, 22, 6); c.fill(); noGlow(c);
+        }
+      }
+      // horizontal tach
+      const km = kmax(d);
+      segments(c, 120, 80, 1360, 46, 80, d.rpm / d.tachMax, (ff) => (ff * d.tachMax > d.redFrom ? '#e4002b' : '#fff'), 'rgba(255,255,255,.06)', 0.3);
+      for (let v = 0; v <= km; v++) text(c, String(v), 120 + v / km * 1360, 146, 20, 'rgba(255,255,255,.6)', 'center', 'Rajdhani', 700);
+      // gear, speed
+      text(c, gearMain(d), 800, 330, 230, '#fff', 'center', 'Rajdhani', 700);
+      text(c, Math.round(spd(d)), 300, 300, 130, '#fff', 'center', 'Rajdhani', 700);
+      text(c, U.speedLabel(), 300, 380, 24, 'rgba(255,255,255,.55)', 'center', 'Rajdhani', 600);
+      // lap strip from the lap timer
+      const lp = (BD.st.perf || {}).lap || {};
+      c.fillStyle = 'rgba(255,255,255,.05)'; rrect(c, 80, 450, 900, 110, 16); c.fill();
+      const t = BD.lapNow();
+      text(c, lp.running ? `LAP ${lp.n}` : 'LAP', 110, 480, 20, 'rgba(255,255,255,.55)', 'left', 'Rajdhani', 700);
+      text(c, lp.running && typeof t === 'number' ? `${Math.floor(t / 60)}:${(t % 60).toFixed(2).padStart(5, '0')}` : '--:--.--', 110, 530, 46, '#fff', 'left', 'Rajdhani', 700);
+      if (typeof lp.delta === 'number') text(c, `${lp.delta > 0 ? '+' : '−'}${Math.abs(lp.delta).toFixed(2)}`, 560, 520, 50, lp.delta <= 0 ? '#2bd46a' : '#e4002b', 'center', 'Rajdhani', 700);
+      text(c, `BEST ${lp.best ? lp.best.time.toFixed(2) : '--'}`, 950, 530, 26, a, 'right', 'Rajdhani', 700);
+      // stripe accent
+      [['#1c69d4', 0], ['#6b2c91', 1], ['#e4002b', 2]].forEach(([col, i]) => { c.fillStyle = col; c.fillRect(80 + i * 14, 175, 10, 40); });
+      text(c, `OIL ${Math.round(U.temp(d.oilT))}°   H2O ${Math.round(tempC(d))}°   BOOST ${U.boost(d.boost).toFixed(1)}`, 140, 196, 22, 'rgba(255,255,255,.7)', 'left', 'Rajdhani', 700);
+    },
+  });
+
+  reg({
+    id: 'maranello05', name: "Maranello '05", era: '2000s', region: 'Euro', inspired: 'Italian supercar with yellow centre tach (Ferrari F430 era)', glass: true,
+    opts: [
+      { k: 'face', label: 'Tach face', type: 'color', def: '#f2c200' },
+      { k: 'needle', label: 'Needle', type: 'color', def: '#d40000' },
+    ],
+    mfd: () => ({ x: 1090, y: 90, w: 450, h: 420, theme: { accent: '#f2c200', bg: 'rgba(10,10,10,.95)', font: 'Barlow Condensed' } }),
+    draw(c, d, k) {
+      const o = k.o;
+      c.fillStyle = '#0a0a0a'; c.fillRect(0, 0, 1600, 600);
+      c.strokeStyle = 'rgba(255,255,255,.03)'; c.lineWidth = 5;
+      for (let i = -600; i < 1600; i += 12) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 600, 600); c.stroke(); }
+      c.fillStyle = '#000'; rrect(c, 1076, 76, 478, 448, 18); c.fill(); c.strokeStyle = '#333'; c.lineWidth = 3; c.stroke();
+      // speedo (left)
+      let x = 300, y = 320, r = 190;
+      chrome(c, x, y, r, 7);
+      c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#141414'); c.fill();
+      const [smax, smaj, smin] = sScale([340, 40, 10], [220, 20, 10]);
+      let ang = dial(c, { x, y, r: r * 0.95, min: 0, max: smax, major: smaj, minor: smin, tickColor: '#f2f2f2', labelColor: '#f2f2f2', labelSize: r * 0.13, labelR: 0.72, font: 'Barlow Condensed', weight: 600 });
+      text(c, U.speedLabel(), x, y + r * 0.35, 16, '#aaa', 'center', 'Barlow Condensed', 600);
+      needle(c, x, y, ang(spd(d)), { len: r * 0.88, w: r * 0.035, color: o.needle, cap: r * 0.11, capColor: '#111', capRim: '#555' });
+      G.glass(c, x, y, r);
+      // yellow centre tach
+      x = 760; y = 300; r = 262;
+      chrome(c, x, y, r, 10);
+      const g = c.createRadialGradient(x, y - r * 0.3, r * 0.1, x, y, r); g.addColorStop(0, o.face); g.addColorStop(1, '#a88400');
+      c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = g; c.fill();
+      ang = dial(c, { x, y, r: r * 0.95, min: 0, max: Math.max(9, kmax(d)), major: 1, minor: 0.25, mid: 0.5, tickColor: '#111', labelColor: '#111', labelSize: r * 0.16, labelR: 0.7, font: 'Barlow Condensed', weight: 700, red: { from: d.redFrom / 1000, r: 0.9, w: 0.1, color: '#d40000' } });
+      text(c, 'x1000', x, y - r * 0.32, 20, '#222', 'center', 'Barlow Condensed', 700);
+      c.fillStyle = '#111'; rrect(c, x - 46, y + r * 0.3, 92, 72, 10); c.fill();
+      text(c, gearMain(d), x, y + r * 0.3 + 38, 54, o.face, 'center', 'Barlow Condensed', 700);
+      needle(c, x, y, ang(d.rpm / 1000), { len: r * 0.9, w: 9, color: o.needle, tail: r * 0.2, cap: 34, capColor: '#111', capRim: '#555' });
+      G.glass(c, x, y, r);
+      lightRow(c, d, 300, 560, 24, 6, { list: ['sigL', 'high', 'park', 'abs', 'esc', 'check', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'taycan20', name: "Zuffen EV '20", era: '2020s', region: 'Euro', inspired: 'Porsche Taycan curved display (EV power meter)', adasNative: false,
+    opts: [{ k: 'accent', label: 'Accent', type: 'color', def: '#7fe0ff' }],
+    mfd: (o) => ({ x: 1110, y: 80, w: 440, h: 440, theme: { accent: o.accent || '#7fe0ff', bg: 'rgba(255,255,255,.04)', font: 'Barlow Condensed' } }),
+    draw(c, d, k) {
+      const a = accent(k, '#7fe0ff');
+      // gently curved glass
+      c.fillStyle = '#000'; c.fillRect(0, 0, 1600, 600);
+      const gl = c.createLinearGradient(0, 0, 1600, 0); gl.addColorStop(0, '#0b0f14'); gl.addColorStop(0.5, '#05070a'); gl.addColorStop(1, '#0b0f14');
+      c.fillStyle = gl; rrect(c, 20, 20, 1560, 560, 60); c.fill();
+      // left: battery + range dials
+      const ring = (x, y, r, f, label, val, col) => {
+        arcBar(c, x, y, r, 10, 0.75 * PI, 2.25 * PI, f, col, 'rgba(255,255,255,.07)', { glow: col });
+        text(c, val, x, y - 6, r * 0.42, '#fff', 'center', 'Barlow Condensed', 600);
+        text(c, label, x, y + r * 0.38, r * 0.16, 'rgba(255,255,255,.55)', 'center', 'Barlow Condensed', 600);
+      };
+      const lvl = levelPct(d);
+      ring(170, 300, 110, lvl / 100, d.isEV ? 'BATTERY' : 'FUEL', `${lvl}%`, lvl < 15 ? '#ff3b30' : '#2bd46a');
+      ring(400, 300, 95, clamp((d.range || 0) / 500000, 0, 1), 'RANGE', d.range ? `${Math.round(U.dist(d.range))}` : '--', a);
+      // centre: power meter with speed
+      const pct = powerDial(c, d, 790, 300, 240, { color: a, font: 'Barlow Condensed' });
+      text(c, Math.round(spd(d)), 790, 280, 130, '#fff', 'center', 'Barlow Condensed', 600);
+      text(c, U.speedLabel(), 790, 350, 24, 'rgba(255,255,255,.55)', 'center', 'Barlow Condensed', 600);
+      text(c, `${pct < 0 ? 'RECUPERATION' : 'POWER'} ${Math.abs(Math.round(pct))}%`, 790, 400, 22, pct < 0 ? '#2bd46a' : a, 'center', 'Barlow Condensed', 700);
+      text(c, d.gear, 790, 470, 40, '#fff', 'center', 'Barlow Condensed', 700);
+      limit(c, d, 600, 90, 28);
+      setSpeedChip(c, d, 940, 90, 30, a);
+      lightRow(c, d, 790, 555, 24, 8, { list: ['sigL', 'high', 'low', 'park', 'abs', 'esc', 'battery', 'tpms', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'w124_89', name: "Sindelfingen '89", era: '1980s', region: 'Euro', inspired: 'Mercedes-Benz W124 E-Class', glass: true,
+    opts: [{ k: 'needle', label: 'Needle', type: 'color', def: '#ff5a1a' }],
+    mfdTheme: { bg: 'rgba(6,6,6,.96)', accent: '#ff8a3a', font: 'Barlow Condensed' },
+    draw(c, d, k) {
+      const o = k.o;
+      c.fillStyle = '#0c0c0c'; c.fillRect(0, 0, 1600, 600);
+      c.fillStyle = '#141414'; rrect(c, 40, 30, 1520, 540, 50); c.fill();
+      const pod = (x, y, r) => {
+        c.beginPath(); c.arc(x, y, r + 8, 0, TAU); c.fillStyle = '#242424'; c.fill();
+        c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#101010'); c.fill();
+      };
+      const nd = (x, y, an, len) => needle(c, x, y, an, { len, w: len * 0.03, style: 'bar', tail: len * 0.16, color: o.needle, cap: len * 0.1, capColor: '#111', capRim: '#444' });
+      // left: combination instrument
+      let x = 330, y = 320, r = 180;
+      pod(x, y, r);
+      mini(c, x, y - 50, 95, fuelFrac(d), { a0: 1.2 * PI, a1: 1.8 * PI, lo: 'R', hi: '1/1', loColor: '#ff3a2a', tick: '#eee', label: '#eee', needle: o.needle, size: 18, redStart: true });
+      mini(c, x - 80, y + 90, 60, waterFrac(d), { a0: 1.15 * PI, a1: 1.85 * PI, lo: '40', hi: '120', tick: '#eee', label: '#eee', needle: o.needle, size: 13, redEnd: true });
+      mini(c, x + 80, y + 90, 60, oilP(d) / 45, { a0: 1.15 * PI, a1: 1.85 * PI, lo: '0', hi: '3', tick: '#eee', label: '#eee', needle: o.needle, size: 13 });
+      icon(c, 'temp', x - 80, y + 112, 20, '#999'); icon(c, 'oil', x + 80, y + 112, 20, '#999'); icon(c, 'fuel', x, y - 22, 20, '#999');
+      G.glass(c, x, y, r);
+      // centre: big speedometer
+      x = 800; y = 300; r = 250;
+      pod(x, y, r);
+      const [smax, smaj, smin] = sScale([260, 20, 10], [160, 20, 5]);
+      let ang = dial(c, { x, y, r: r * 0.96, min: 0, max: smax, major: smaj, minor: smin, tickColor: '#f0f0f0', labelColor: '#f0f0f0', labelSize: r * 0.12, labelR: 0.74, font: 'Barlow Condensed', weight: 500, majorW: 4, minorW: 2, label: (v) => ((v / smaj) % 2 === 0 ? String(v) : null) });
+      text(c, U.speedLabel(), x, y - r * 0.32, 18, '#aaa', 'center', 'Barlow Condensed', 500);
+      drum(c, x, y + r * 0.38, U.dist(d.odo) % 1e6, 6, 30);
+      drum(c, x, y + r * 0.56, (U.dist(d.trip) * 10) % 1e4, 4, 22);
+      nd(x, y, ang(spd(d)), r * 0.9);
+      G.glass(c, x, y, r);
+      // right: tach with clock inset
+      x = 1270; y = 320; r = 180;
+      pod(x, y, r);
+      ang = dial(c, { x, y, r: r * 0.95, min: 0, max: kmax(d), major: 1, minor: 0.5, tickColor: '#f0f0f0', labelColor: '#f0f0f0', labelSize: r * 0.16, labelR: 0.7, font: 'Barlow Condensed', weight: 500, red: { from: d.redFrom / 1000, r: 0.9, w: 0.08, color: '#c81e1e' } });
+      const hm = BD.clock(d.tod).split(':').map(Number);
+      c.beginPath(); c.arc(x, y + 70, 40, 0, TAU); c.fillStyle = '#060606'; c.fill(); c.strokeStyle = '#333'; c.lineWidth = 2; c.stroke();
+      needle(c, x, y + 70, -PI / 2 + ((hm[0] % 12) + hm[1] / 60) / 12 * TAU, { len: 22, w: 3, style: 'bar', color: '#eee', shadow: false });
+      needle(c, x, y + 70, -PI / 2 + hm[1] / 60 * TAU, { len: 32, w: 2, style: 'bar', color: '#eee', shadow: false });
+      nd(x, y, ang(d.rpm / 1000), r * 0.88);
+      G.glass(c, x, y, r);
+      lightRow(c, d, 800, 575, 24, 8, { list: ['sigL', 'high', 'park', 'abs', 'check', 'oil', 'battery', 'sigR'] });
+    },
+  });
+
+  // ---------------- Asian ----------------
+  reg({
+    id: 'tokyo86', name: "Tokyo VFD '86", era: '1980s', region: 'Japan', inspired: '80s Japanese digital dash (Soarer / 300ZX)',
+    opts: [{ k: 'tint', label: 'Glow', type: 'select', options: ['aqua', 'green', 'amber'], def: 'aqua' }],
+    mfdTheme: { bg: 'rgba(0,10,12,.96)', accent: '#ff3ad0', fg: '#7ff7ff', dim: 'rgba(127,247,255,.6)', font: 'Orbitron', line: 'rgba(127,247,255,.15)' },
+    draw(c, d, k) {
+      const tint = { aqua: '#7ff7ff', green: '#7dff9a', amber: '#ffbf4a' }[k.o.tint];
+      const mag = '#ff3ad0', off = 'rgba(255,255,255,.04)';
+      c.fillStyle = '#010304'; c.fillRect(0, 0, 1600, 600);
+      const gl = c.createLinearGradient(0, 0, 0, 600); gl.addColorStop(0, 'rgba(60,140,160,.10)'); gl.addColorStop(1, 'rgba(0,0,0,0)');
+      c.fillStyle = gl; rrect(c, 40, 30, 1520, 540, 24); c.fill();
+      // stair-step tach across the top: bars get taller as revs rise
+      const n = 50, f = d.rpm / d.tachMax;
+      for (let i = 0; i < n; i++) {
+        const x = 90 + i * 28.5, hh = 20 + i * 2.6, lit = f * n > i;
+        const col = i / n * d.tachMax > d.redFrom ? '#ff3b30' : i > n * 0.75 ? mag : tint;
+        c.fillStyle = lit ? col : off;
+        if (lit) glow(c, col, 8);
+        c.fillRect(x, 200 - hh, 20, hh); noGlow(c);
+      }
+      for (let v = 0; v <= kmax(d); v++) text(c, String(v), 100 + v / kmax(d) * n * 28.5, 222, 18, tint, 'left', 'Orbitron', 500);
+      text(c, 'x1000 RPM', 1500, 222, 16, mag, 'right', 'Orbitron', 600);
+      // speed
+      seg7(c, String(Math.round(spd(d))).padStart(3, ' '), 760, 380, 170, tint, off, { glow: tint, glowBlur: 12 });
+      text(c, mph() ? 'MPH' : 'km/h', 960, 440, 26, mag, 'left', 'Orbitron', 700);
+      // side bars
+      const vbar = (x, label, frac, warnLow) => {
+        segments(c, x, 270, 40, 220, 14, frac, (ff) => (warnLow && ff < 0.15 ? '#ff3b30' : tint), off, 0.3, true);
+        text(c, label, x + 20, 510, 16, mag, 'center', 'Orbitron', 600);
+      };
+      vbar(110, 'FUEL', fuelFrac(d), true);
+      vbar(190, 'TEMP', waterFrac(d), false);
+      vbar(270, 'OIL', clamp(oilP(d) / 80, 0, 1), false);
+      seg7(c, gearMain(d).slice(0, 2), 1330, 360, 120, mag, off, { glow: mag });
+      text(c, 'GEAR', 1330, 445, 16, tint, 'center', 'Orbitron', 600);
+      seg7(c, odoStr(d), 1330, 520, 30, tint, off);
+      lightRow(c, d, 760, 530, 26, 8, { list: ['sigL', 'high', 'park', 'check', 'oil', 'battery', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'synergy16', name: "Synergy '16", era: '2010s', region: 'Japan', inspired: 'Toyota Prius-style hybrid display', adasNative: false,
+    opts: [{ k: 'accent', label: 'Accent', type: 'color', def: '#3fc2ff' }],
+    mfd: (o) => ({ x: 1100, y: 70, w: 460, h: 470, theme: { accent: o.accent || '#3fc2ff', bg: 'rgba(255,255,255,.04)' } }),
+    draw(c, d, k) {
+      const a = accent(k, '#3fc2ff');
+      const bg = c.createLinearGradient(0, 0, 0, 600); bg.addColorStop(0, '#0a1420'); bg.addColorStop(1, '#03070c');
+      c.fillStyle = bg; c.fillRect(0, 0, 1600, 600);
+      text(c, Math.round(spd(d)), 240, 250, 170, '#fff', 'center', 'Rajdhani', 600);
+      text(c, U.speedLabel(), 240, 350, 28, 'rgba(255,255,255,.6)', 'center', 'Rajdhani', 600);
+      gearRow(c, d, 240, 430, 34, '#fff', 'rgba(255,255,255,.2)', ['P', 'R', 'N', 'D', 'B'], 'Rajdhani');
+      // READY + EV mode
+      if (d.running || d.isEV) { glow(c, '#2bd46a', 10); text(c, 'READY', 240, 500, 30, '#2bd46a', 'center', 'Rajdhani', 700); noGlow(c); }
+      const evMode = d.isHybrid && d.speed > 1 && d.engKw < 2 && d.motorKw > 1;
+      if (evMode) { c.strokeStyle = '#2bd46a'; c.lineWidth = 3; rrect(c, 180, 530, 120, 40, 10); c.stroke(); text(c, 'EV MODE', 240, 551, 20, '#2bd46a', 'center', 'Rajdhani', 700); }
+      // hybrid system indicator: CHG | ECO | PWR arc
+      const x = 680, y = 360, r = 230, a0 = 1.05 * PI, a1 = 1.95 * PI;
+      const zones = [[0, 0.22, '#2bd46a', 'CHG'], [0.22, 0.75, a, 'ECO'], [0.75, 1, '#ffb000', 'PWR']];
+      for (const [s, e2, col, lbl] of zones) {
+        c.strokeStyle = col + '40'; c.lineWidth = 46;
+        c.beginPath(); c.arc(x, y, r, a0 + (a1 - a0) * s, a0 + (a1 - a0) * e2); c.stroke();
+        const am = a0 + (a1 - a0) * (s + e2) / 2;
+        text(c, lbl, x + Math.cos(am) * (r + 50), y + Math.sin(am) * (r + 50), 22, col, 'center', 'Rajdhani', 700);
+      }
+      const load = d.isEV || d.isHybrid ? (d.motorKw + Math.max(0, d.engKw)) : Math.max(0, d.engKw);
+      const pos = load < 0 ? 0.22 * (1 - clamp(-load / 60, 0, 1)) : 0.22 + 0.78 * clamp(load / d.maxPowerKw, 0, 1);
+      c.strokeStyle = pos < 0.22 ? '#2bd46a' : pos > 0.75 ? '#ffb000' : a; c.lineWidth = 46; glow(c, c.strokeStyle, 12);
+      c.beginPath(); c.arc(x, y, r, a0 + (a1 - a0) * Math.min(pos, 0.22), a0 + (a1 - a0) * Math.max(pos, 0.22)); c.stroke(); noGlow(c);
+      const t = (BD.st.trips || {}).a || {};
+      text(c, t.avgCons ? `${U.consumption(t.avgCons).toFixed(1)}` : '--', x, y - 40, 70, '#fff', 'center', 'Rajdhani', 600);
+      text(c, `${U.consLabel()} trip avg`, x, y + 10, 20, 'rgba(255,255,255,.55)', 'center', 'Rajdhani', 600);
+      if (d.battery !== null) {
+        for (let i = 0; i < 8; i++) { c.fillStyle = i < Math.round(d.battery * 8) ? a : 'rgba(255,255,255,.08)'; c.fillRect(x - 100 + i * 26, y + 50, 20, 30); }
+        text(c, 'HYBRID BATTERY', x, y + 100, 16, 'rgba(255,255,255,.5)', 'center', 'Rajdhani', 700);
+      }
+      lightRow(c, d, 680, 32, 24, 8, { list: ['sigL', 'high', 'low', 'park', 'abs', 'esc', 'check', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'rotary92', name: "Rotary '92", era: '1990s', region: 'Japan', inspired: 'Mazda RX-7 (FD): centre tach, small gauge stack', glass: true,
+    opts: [{ k: 'needle', label: 'Needle', type: 'color', def: '#ff3a1a' }],
+    mfdTheme: { bg: 'rgba(8,8,10,.96)', accent: '#ff3a1a', font: 'Rajdhani' },
+    draw(c, d, k) {
+      const o = k.o;
+      c.fillStyle = '#0b0b0d'; c.fillRect(0, 0, 1600, 600);
+      const pod = (x, y, r) => {
+        c.beginPath(); c.arc(x, y, r + 14, 0, TAU); c.fillStyle = '#000'; c.fill();
+        c.beginPath(); c.arc(x, y, r + 5, 0, TAU); c.fillStyle = '#2b2d31'; c.fill();
+        c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#111216'); c.fill();
+      };
+      const nd = (x, y, an, len) => needle(c, x, y, an, { len, w: len * 0.03, tail: len * 0.16, color: o.needle, cap: len * 0.11, capColor: '#111', capRim: '#3a3a3a' });
+      let x = 330, y = 340, r = 190;
+      pod(x, y, r);
+      const [smax, smaj, smin] = sScale([260, 20, 10], [160, 20, 5]);
+      let ang = dial(c, { x, y, r: r * 0.95, min: 0, max: smax, major: smaj, minor: smin, tickColor: '#f2f2f2', labelColor: '#f2f2f2', labelSize: r * 0.13, labelR: 0.72, font: 'Rajdhani', weight: 700, label: (v) => ((v / smaj) % 2 === 0 ? String(v) : null) });
+      text(c, U.speedLabel(), x, y - r * 0.32, 16, '#aaa', 'center', 'Rajdhani', 600);
+      text(c, odoStr(d), x, y + r * 0.42, 22, '#ddd', 'center', 'Rajdhani', 600);
+      nd(x, y, ang(spd(d)), r * 0.88);
+      G.glass(c, x, y, r);
+      x = 800; y = 300; r = 262;
+      pod(x, y, r);
+      ang = dial(c, { x, y, r: r * 0.95, min: 0, max: Math.max(10, kmax(d)), major: 1, minor: 0.25, mid: 0.5, tickColor: '#f2f2f2', labelColor: '#f2f2f2', labelSize: r * 0.15, labelR: 0.7, font: 'Rajdhani', weight: 700, red: { from: d.redFrom / 1000, r: 0.88, w: 0.1, color: '#e3121b' }, labelColorFn: (v) => (v * 1000 >= d.redFrom ? '#ff4a3a' : null) });
+      text(c, 'x1000 r/min', x, y - r * 0.3, 18, '#aaa', 'center', 'Rajdhani', 600);
+      text(c, gearMain(d), x, y + r * 0.42, 44, '#fff', 'center', 'Rajdhani', 700);
+      nd(x, y, ang(d.rpm / 1000), r * 0.9);
+      G.glass(c, x, y, r);
+      // stack of three small gauges
+      const small = (sy, frac, lo, hi, name, red) => {
+        pod(1260, sy, 82);
+        mini(c, 1260, sy + 12, 66, frac, { lo, hi, name, tick: '#eee', label: '#eee', needle: o.needle, size: 15, font: 'Rajdhani', [red]: true, labelR: 1.1 });
+      };
+      small(120, clamp((d.boost + 10) / 25, 0, 1), '-', '+', 'BOOST', 'redEnd');
+      small(300, waterFrac(d), 'C', 'H', 'WATER', 'redEnd');
+      small(480, fuelFrac(d), 'E', 'F', 'FUEL', 'redStart');
+      lightRow(c, d, 800, 575, 24, 8, { list: ['sigL', 'high', 'park', 'abs', 'check', 'oil', 'battery', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'gtr09', name: "Godzilla '09", era: '2000s', region: 'Japan', inspired: 'Nissan GT-R (R35) with multi-function meter', glass: true,
+    opts: [{ k: 'accent', label: 'Screen accent', type: 'color', def: '#ff8a00' }],
+    mfd: (o) => ({ x: 1110, y: 70, w: 450, h: 460, theme: { accent: o.accent || '#ff8a00', bg: '#08090b', fg: '#f2f2f2', dim: '#8d95a3', font: 'Rajdhani', line: 'rgba(255,255,255,.1)' } }),
+    draw(c, d, k) {
+      c.fillStyle = '#0a0b0d'; c.fillRect(0, 0, 1600, 600);
+      c.strokeStyle = 'rgba(255,255,255,.035)'; c.lineWidth = 6;
+      for (let i = -600; i < 1600; i += 14) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 600, 600); c.stroke(); }
+      c.fillStyle = '#000'; rrect(c, 1096, 56, 478, 488, 16); c.fill(); c.strokeStyle = '#2c2f36'; c.lineWidth = 3; c.stroke();
+      const pod = (x, y, r) => {
+        c.beginPath(); c.arc(x, y, r + 12, 0, TAU); c.fillStyle = '#1b1d22'; c.fill();
+        c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#0e0f12'); c.fill();
+      };
+      const glowNum = '#ff9a3a';
+      let x = 300, y = 320, r = 200;
+      pod(x, y, r);
+      const [smax, smaj, smin] = sScale([340, 20, 10], [220, 20, 10]);
+      let ang = dial(c, { x, y, r: r * 0.95, min: 0, max: smax, major: smaj, minor: smin, tickColor: '#fff', labelColor: glowNum, labelGlow: glowNum, labelSize: r * 0.12, labelR: 0.73, font: 'Rajdhani', weight: 700, label: (v) => ((v / smaj) % 2 === 0 ? String(v) : null) });
+      text(c, U.speedLabel(), x, y - r * 0.32, 16, '#999', 'center', 'Rajdhani', 600);
+      needle(c, x, y, ang(spd(d)), { len: r * 0.88, w: r * 0.03, color: '#ff2a1a', glow: '#ff2a1a', glowBlur: 8, cap: r * 0.12, capColor: '#111', capRim: '#444' });
+      G.glass(c, x, y, r);
+      x = 780; y = 300; r = 265;
+      pod(x, y, r);
+      ang = dial(c, { x, y, r: r * 0.95, min: 0, max: kmax(d), major: 1, minor: 0.25, tickColor: '#fff', labelColor: glowNum, labelGlow: glowNum, labelSize: r * 0.15, labelR: 0.71, font: 'Rajdhani', weight: 700, red: { from: d.redFrom / 1000, r: 0.92, w: 0.07, color: '#ff2a1a' } });
+      c.fillStyle = '#000'; rrect(c, x - 70, y + 40, 140, 120, 14); c.fill(); c.strokeStyle = '#333'; c.lineWidth = 2; c.stroke();
+      glow(c, glowNum, 14); text(c, gearMain(d), x, y + 102, 96, glowNum, 'center', 'Rajdhani', 700); noGlow(c);
+      needle(c, x, y, ang(d.rpm / 1000), { len: r * 0.9, w: 8, color: '#ff2a1a', glow: '#ff2a1a', glowBlur: 10, cap: 32, capColor: '#111', capRim: '#444' });
+      G.glass(c, x, y, r);
+      lightRow(c, d, 540, 575, 24, 8, { list: ['sigL', 'high', 'park', 'abs', 'esc', 'check', 'oil', 'battery', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'ioniq22', name: "Seoul EV '22", era: '2020s', region: 'Korea', inspired: 'Hyundai Ioniq 5 / Kia EV6 tablet-style display',
+    opts: [
+      { k: 'theme', label: 'Theme', type: 'select', options: ['dark', 'light'], def: 'dark' },
+      { k: 'accent', label: 'Accent', type: 'color', def: '#2fd0b0' },
+    ],
+    mfd: (o) => ({ x: 1100, y: 60, w: 460, h: 480, theme: o.theme === 'light'
+      ? { bg: 'rgba(255,255,255,.8)', fg: '#151a22', dim: 'rgba(21,26,34,.55)', line: 'rgba(0,0,0,.1)', accent: o.accent || '#2fd0b0', mapTheme: 'light' }
+      : { bg: 'rgba(255,255,255,.04)', accent: o.accent || '#2fd0b0' } }),
+    draw(c, d, k) {
+      const light = k.o.theme === 'light', a = accent(k, '#2fd0b0');
+      const fg = light ? '#151a22' : '#fff', dim = light ? 'rgba(21,26,34,.55)' : 'rgba(255,255,255,.55)';
+      c.fillStyle = light ? '#eef1f4' : '#07090c'; c.fillRect(0, 0, 1600, 600);
+      // left: power / regen ring
+      const pct = powerDial(c, d, 250, 310, 190, { color: a, track: light ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)', label: dim });
+      text(c, `${Math.abs(Math.round(pct))}%`, 250, 300, 56, fg, 'center', 'Rajdhani', 600);
+      text(c, pct < 0 ? 'REGEN' : 'POWER', 250, 350, 18, pct < 0 ? '#2bd46a' : a, 'center', 'Rajdhani', 700);
+      // centre: speed in a ring + drive mode
+      const x = 700, y = 300, r = 220;
+      c.strokeStyle = light ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.12)'; c.lineWidth = 3;
+      c.beginPath(); c.arc(x, y, r, 0, TAU); c.stroke();
+      arcBar(c, x, y, r, 6, -PI / 2, 1.5 * PI, clamp(spd(d) / (mph() ? 160 : 260), 0, 1), a, null, { glow: light ? null : a });
+      text(c, Math.round(spd(d)), x, y - 10, 140, fg, 'center', 'Rajdhani', 600);
+      text(c, U.speedLabel(), x, y + 70, 24, dim, 'center', 'Rajdhani', 600);
+      text(c, (d.driveMode || 'normal').toUpperCase(), x, y + 120, 22, a, 'center', 'Rajdhani', 700);
+      gearRow(c, d, x, y - 150, 30, fg, light ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.18)', ['P', 'R', 'N', 'D'], 'Rajdhani');
+      limit(c, d, 440, 110, 30);
+      setSpeedChip(c, d, 900, 110, 30, a);
+      // battery bar along the bottom
+      const lvl = levelPct(d);
+      c.fillStyle = light ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)'; rrect(c, 120, 545, 860, 14, 7); c.fill();
+      c.fillStyle = lvl < 15 ? '#ff3b30' : a; rrect(c, 120, 545, 860 * lvl / 100, 14, 7); c.fill();
+      text(c, `${lvl}%   ${rangeStr(d)}   ${BD.clock(d.tod)}`, 550, 520, 22, fg, 'center', 'Rajdhani', 700);
+      lightRow(c, d, 550, 30, 24, 8, { list: ['sigL', 'high', 'low', 'park', 'abs', 'esc', 'battery', 'tpms', 'sigR'] });
+    },
+  });
+
   // =============================================================== custom
   reg({
     id: 'race', mfdTheme: { bg: 'rgba(0,0,0,.96)', accent: '#00e5ff', font: 'Orbitron' }, name: 'Motorsport Pro', era: 'Custom', region: 'Custom', inspired: 'Race-car data displays',
@@ -1394,7 +1999,7 @@ window.DESIGNS = (() => {
     opts: [
       { k: 'layout', label: 'Layout', type: 'select', options: ['twin', 'triple', 'single'], def: 'twin' },
       { k: 'style', label: 'Dial style', type: 'select', options: ['classic', 'ring', 'digital'], def: 'ring' },
-      { k: 'center', label: 'Centre widget', type: 'select', options: ['pages', 'info', 'map', 'adas', 'surround', 'gforce', 'tires', 'none'], def: 'pages' },
+      { k: 'center', label: 'Centre widget', type: 'select', options: ['info', 'map', 'adas', 'surround', 'gforce', 'tires', 'none'], def: 'info' },
       { k: 'font', label: 'Font', type: 'select', options: ['Rajdhani', 'Barlow Condensed', 'Orbitron', 'Bebas Neue'], def: 'Rajdhani' },
       { k: 'bg', label: 'Background', type: 'color', def: '#05070a' },
       { k: 'face', label: 'Dial face', type: 'color', def: '#0d1016' },
@@ -1402,11 +2007,6 @@ window.DESIGNS = (() => {
       { k: 'accent', label: 'Accent', type: 'color', def: '#ff8a00' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff3a1a' },
     ],
-    mfd: (o) => {
-      if (o.center !== 'pages') return null;
-      const r = o.layout === 'single' ? [900, 60, 640, 480] : o.layout === 'triple' ? [1100, 120, 460, 400] : [610, 80, 380, 430];
-      return { x: r[0], y: r[1], w: r[2], h: r[3], theme: { accent: o.accent, fg: o.numbers, font: o.font, bg: 'rgba(255,255,255,.04)' } };
-    },
     draw(c, d, k) {
       const o = k.o, a = o.accent, F = o.font;
       c.fillStyle = o.bg; c.fillRect(0, 0, 1600, 600);
@@ -1435,7 +2035,7 @@ window.DESIGNS = (() => {
       };
       const centre = (x0, y0, w, h) => {
         const v = o.center;
-        if (v === 'none' || v === 'pages') return;
+        if (v === 'none') return;
         if (v === 'map') { MapView.mini(c, d, x0, y0, w, h, { zoom: 1.2, clipRound: 20 }); navCard(c, d, x0 + 10, y0 + 10, w - 20, 64, { accent: a }); }
         else if (v === 'adas') { G.adasView(c, x0 + w / 2, y0 + h * 0.55, w * 0.85, h * 0.7, d, { accent: a }); setSpeedChip(c, d, x0 + 30, y0 + 30, 30, a, F); limit(c, d, x0 + w - 40, y0 + 40, 28); }
         else if (v === 'surround') surround(c, d, x0, y0, w, h, { accent: a });

@@ -129,7 +129,8 @@ class Demo {
       odo: st.odo || 184233000, trip: st.trip || 0, t: 0,
       lights: 1, fog: false, sigL: false, sigR: false, hazard: false, horn: false, pbrake: false,
       ignition: true, running: true, cruise: false, cruiseTarget: 0, escMode: 'on', driveMode: 'comfort',
-      brakeT: [60, 60, 60, 60], brakeCore: [50, 50, 50, 50], damage: 0, gx: 0, gy: 0,
+      brakeT: [60, 60, 60, 60], brakeCore: [50, 50, 50, 50], damage: 350, gx: 0, gy: 0,
+      batt: full ? 0.62 : st.batt || 0.62, motorKw: 0, engKw: 0, engNm: 0,
       finalDrive: (this.values && this.values.$finaldrive) || 3.42, revLimit: (this.values && this.values.$revLimiterRPM) || 7400,
     };
     this.traffic = [
@@ -197,6 +198,7 @@ class Demo {
     else if (st.v > tgt + 1.5) { thr = 0; brk = Math.min(1, (st.v - tgt - 1.5) / 5); }
     else { thr = 0.1 + st.v * 0.004; brk = 0; }
     if (!st.running) thr = 0;
+    if (tgt === 0) { thr = 0; brk = st.v > 0.05 ? 0.9 : 0; } // parked / engine off: come to a full stop
     const k = Math.min(1, dt * 5);
     st.throttle += (thr - st.throttle) * k;
     st.brake += (brk - st.brake) * k;
@@ -228,6 +230,14 @@ class Demo {
     st.water += ((88 + st.throttle * 8) - st.water) * dt * 0.02;
     st.oil += ((96 + st.throttle * 18) - st.oil) * dt * 0.012;
     st.fuel = Math.max(0, st.fuel - (0.00002 + st.throttle * st.rpm * 0.00000004) * dt * 60 / 60);
+
+    // mild-hybrid: the motor helps under throttle and recovers energy when braking or coasting
+    st.engNm = st.running ? st.throttle * torqueCurve * 520 : 0;
+    st.engKw = st.engNm * (st.rpm / 9.549) / 1000;
+    const assist = st.batt > 0.15 ? st.throttle * 38 : 0;
+    const regen = st.v > 3 ? -(st.brake * 55 + (st.throttle < 0.05 ? 6 : 0)) : 0;
+    st.motorKw += ((st.throttle > 0.05 ? assist : regen) - st.motorKw) * Math.min(1, dt * 6);
+    st.batt = Math.min(0.95, Math.max(0.1, st.batt - st.motorKw * dt / (1.6 * 3600)));
 
     for (let w = 0; w < 4; w++) {
       const bias = w < 2 ? 0.64 : 0.36;
@@ -274,6 +284,8 @@ class Demo {
       avgFuelConsumption: 8.4, boostMax: this.values.$wastegateStart || 18, maxrpm: st.revLimit, idlerpm: 800,
       lowpressure: 0, gearboxMode: 'auto', engineThrottle: st.throttle, wheelThermals: 0,
       clutchRatio: st.shiftT > 0 ? 0 : 1, smoothShiftLogicAV: st.rpm / 9.55, dseColor: 0, doorFLCoupler_notAttached: 0,
+      bd_engTorque: st.engNm, bd_engPower: st.engKw, bd_motorPower: st.motorKw, bd_motorTorque: st.motorKw * 1000 / Math.max(50, st.rpm / 9.549),
+      bd_hasEngine: true, bd_hasMotor: true, bd_battery: st.batt, bd_batteryKwh: st.batt * 1.6, bd_batteryCapKwh: 1.6,
     };
   }
 
@@ -306,6 +318,16 @@ class Demo {
     this.wf = (this.wf || 0) + 1;
     if (this.wf % 2 === 0) msg.wheels = this.wheels();
     this.emit(msg);
+    // a watched traffic car streams too (spectating)
+    const c = this.traffic.find((x) => x.id === this.watchId);
+    if (c) {
+      const q = this.track.at(c.s, c.lat);
+      const rpm = 1500 + (c.v % 12) * 300;
+      this.emit({
+        t: 'veh', vid: c.id, g: [c.v * c.v * q.curv, 0, G], pos: [q.x, q.y, 110], vel: [q.hx * c.v, q.hy * c.v, 0], dir: [q.hx, q.hy, 0],
+        e: { wheelspeed: c.v, airspeed: c.v, rpm, rpmTacho: rpm, gear: 'D', gearIndex: 4, throttle: 0.3, brake: 0, fuel: 0.5, fuelCapacity: 55, watertemp: 90, oiltemp: 98, lowbeam: 1, engineRunning: 1, odometer: 52000000, bd_hasEngine: true, bd_hasMotor: false },
+      });
+    }
   }
 
   sendSlow() {
@@ -319,16 +341,25 @@ class Demo {
         rearDiff: { name: 'rearDiff', type: 'differential', diffType: 'lsd', gearRatio: st.finalDrive, rpmOut: st.v / WHEEL_R * 9.549 },
         turbocharger: { name: 'turbocharger', type: 'turbocharger', boost: st.boost, turboRPM: st.boost * 9000 },
       },
-      energy: { mainTank: { name: 'mainTank', energyType: 'gasoline', remainingRatio: st.fuel, capacity: 62, remainingVolume: st.fuel * 62 } },
+      energy: {
+        mainTank: { name: 'mainTank', energyType: 'gasoline', remainingRatio: st.fuel, capacity: 62, remainingVolume: st.fuel * 62 },
+        hybridBattery: { name: 'hybridBattery', energyType: 'electricEnergy', remainingRatio: st.batt, storedEnergy: st.batt * 1.6 * 3600000 },
+      },
+    });
+    // a few dents so the damage screen has something to show in demo mode
+    this.emit({
+      t: 'dmg', vid: 1000, total: st.damage, flags: { 'body.FL': 1 }, broken: [], wheels: [],
+      deform: { bumper_F: 0.18, mirror_L: 1, headlight_L: 0.4 }, engine: { stalled: !st.running, disabled: false },
     });
   }
 
   spec() {
     return {
       t: 'spec', vid: 1000,
-      engine: { maxRPM: this.st.revLimit, idleRPM: 800, maxAvailableRPM: 7600, revLimiterRPM: this.st.revLimit, maxPower: 412, maxTorque: 520, maxPowerRPM: 6250, maxTorqueRPM: 2750 },
+      engine: { hybrid: true, maxRPM: this.st.revLimit, idleRPM: 800, maxAvailableRPM: 7600, revLimiterRPM: this.st.revLimit, maxPower: 412, maxTorque: 520, maxPowerRPM: 6250, maxTorqueRPM: 2750 },
       gearbox: { type: 'automaticGearbox', minGearIndex: -1, maxGearIndex: 7, ratios: Object.fromEntries(RATIOS.map((r, i) => [String(i - 1), r])) },
       controllers: ['cruiseControl', 'esc', 'driveModes', 'shiftLogic'], driveMode: this.st.driveMode, mass: 1520,
+      hybrid: true,
       energy: { mainTank: { energyType: 'gasoline', capacity: 62 } },
     };
   }
@@ -407,7 +438,7 @@ class Demo {
     }
     this.emit({
       t: 'world', level: 'demo_circuit', myId: 1000, vehicles, route, adas: this.adas, adasState,
-      speedLimit: this.adas.tsr ? tr.limit(st.s) : null, road: 'demo', tod: this.tod, paused: false,
+      speedLimit: this.adas.tsr ? tr.limit(st.s) : null, road: 'demo', tod: this.tod, paused: false, watched: this.watchId || null,
     });
   }
 
@@ -450,6 +481,7 @@ class Demo {
         break;
       }
       case 'navClear': this.route = null; break;
+      case 'watch': this.watchId = cmd.vid || null; break;
       case 'setVars':
         Object.assign(this.values, cmd.values || {});
         this.reset(false); // like the game, new tuning respawns the car

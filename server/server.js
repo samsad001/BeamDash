@@ -11,6 +11,10 @@ const { Demo } = require('./demo');
 const actions = require('./actions');
 const { Media } = require('./media');
 const { Trips } = require('./trips');
+const { Perf } = require('./perf');
+const { Fun } = require('./fun');
+const { Recorder } = require('./recorder');
+const { VERSION } = require('./version');
 
 // ------------------------------------------------------------------ config
 const args = process.argv.slice(2);
@@ -38,15 +42,21 @@ const saveJson = (name, obj) => fs.writeFile(path.join(DATA, name), JSON.stringi
 // ADAS choices live on the server so every phone, macro and game restart sees the same settings
 const prefs = loadJson('settings.json', { adas: { fcw: true, fcwSens: 2, aeb: false, bsm: true, tsr: true, accGap: 2 } });
 let deck = loadJson('deck.json', null);
-// real trips are saved; the demo car gets its own throw-away counters
-const trips = new Trips(loadJson('trips.json', null));
-let demoTrips = new Trips(null);
-setInterval(() => { if (trips.dirty) { trips.dirty = false; saveJson('trips.json', trips.t); } }, 10000);
+// real counters are saved; the demo car gets its own throw-away set so it never pollutes your records
+const real = { trips: new Trips(loadJson('trips.json', null)), perf: new Perf(loadJson('perf.json', null)), fun: new Fun(loadJson('fun.json', null)) };
+let demoSet = null;
+const freshDemoSet = () => ({ trips: new Trips(null), perf: new Perf(null), fun: new Fun(null) });
+const recorder = new Recorder(path.join(DATA, 'recordings'));
+setInterval(() => {
+  if (real.trips.dirty) { real.trips.dirty = false; saveJson('trips.json', real.trips.t); }
+  if (real.perf.dirty) { real.perf.dirty = false; saveJson('perf.json', real.perf); }
+  if (real.fun.dirty) { real.fun.dirty = false; saveJson('fun.json', real.fun); }
+}, 10000);
 
 // ------------------------------------------------------------------ state
 const cache = {
-  info: null, vars: null, spec: null, world: null, pt: null,
-  electrics: {}, map: null, mapVersion: 0, mapLevel: null,
+  info: null, vars: null, spec: null, world: null, pt: null, dmg: null,
+  electrics: {}, map: null, mapVersion: 0, mapLevel: null, last: null,
 };
 let lastModVeh = 0, lastGe = 0, lastOutgauge = 0;
 let geAddr = CFG.gameHost ? { address: CFG.gameHost, port: CFG.gameCmdPort } : null;
@@ -72,24 +82,54 @@ function source() {
 function status() {
   const now = Date.now();
   return {
-    src: source(), demo: demo.active, clients: clients.size,
+    version: VERSION, src: source(), demo: demo.active, clients: clients.size,
     game: lastGe ? now - lastGe : null, veh: lastModVeh ? now - lastModVeh : null,
     outgauge: lastOutgauge ? now - lastOutgauge : null,
     gameHost: geAddr ? geAddr.address : null, mapVersion: cache.mapVersion, mapLevel: cache.mapLevel,
+    recording: recorder.active ? recorder.file : null, watched: cache.world ? cache.world.watched || null : null,
   };
 }
 
-const activeTrips = () => (demo.active ? demoTrips : trips);
+const active = () => (demo.active ? (demoSet = demoSet || freshDemoSet()) : real);
+const carKey = (info) => (info ? `${info.jbeam || '?'}|${(info.config && info.config.Configuration) || (info.current && info.current.config_key) || ''}` : null);
+
+// messages from cars other than the one you drive (spectating) go to the browsers but not into trips / caches
+function isOtherCar(msg) {
+  if (msg.vid === undefined || !cache.world || cache.world.myId === undefined || cache.world.myId === null) return false;
+  return msg.vid !== cache.world.myId;
+}
+
+function flushEvents() {
+  const s = active();
+  for (const text of s.perf.events.splice(0)) emit('toast', { text, kind: 'record' });
+  for (const text of s.fun.events.splice(0)) emit('toast', { text, kind: text.startsWith('🏆') ? 'achievement' : 'info' });
+}
 
 // ------------------------------------------------------------------ incoming game data
 const chunks = new Map();
 
 function handleMessage(msg, raw, fromGe) {
+  if (isOtherCar(msg)) {
+    if (['veh', 'electrics', 'pt', 'spec', 'dmg'].includes(msg.t)) emit(msg.t, raw || msg);
+    return;
+  }
   switch (msg.t) {
     case 'veh':
       if (msg.e) {
         Object.assign(cache.electrics, msg.e);
-        activeTrips().update(cache.electrics);
+        const e = cache.electrics;
+        const s = active();
+        const maxRpm = (cache.spec && cache.spec.engine && cache.spec.engine.maxRPM) || e.maxrpm || 7000;
+        s.trips.update(e, { accel: msg.g ? msg.g[1] : 0, rpmFrac: (e.rpm || 0) / maxRpm });
+        const now = Date.now();
+        s.perf.update(e, msg.pos || null, now);
+        const tod = cache.world && cache.world.tod;
+        const hour = typeof tod === 'number' ? (tod * 24 + 12) % 24 : 12;
+        s.fun.update(msg, e, (cache.dmg && cache.dmg.total) || (cache.pt && cache.pt.damage) || 0, {
+          night: hour < 6 || hour >= 20, perf: s.perf, lapDone: !!s.perf.lastLap, trips: s.trips.snapshot(),
+        });
+        recorder.sample(msg, e);
+        if (msg.pos) cache.last = { pos: msg.pos, dir: msg.dir };
       }
       emit('veh', raw || msg);
       break;
@@ -98,14 +138,20 @@ function handleMessage(msg, raw, fromGe) {
       emit('electrics', raw || msg);
       break;
     case 'pt': cache.pt = msg; emit('pt', raw || msg); break;
+    case 'dmg': cache.dmg = msg; emit('dmg', raw || msg); break;
     case 'spec': cache.spec = msg; emit('spec', raw || msg); break;
     case 'info':
-      if (!cache.info || cache.info.vid !== msg.vid || cache.info.jbeam !== msg.jbeam) activeTrips().newJourney();
+      if (!cache.info || cache.info.vid !== msg.vid || cache.info.jbeam !== msg.jbeam) active().trips.newJourney();
       cache.info = msg; cache.electrics = {};
+      active().fun.setCar(carKey(msg));
       emit('info', raw || msg);
       break;
     case 'vars': cache.vars = msg; emit('vars', raw || msg); break;
-    case 'world': cache.world = msg; emit('world', raw || msg); break;
+    case 'world':
+      cache.world = msg;
+      active().perf.setLevel(msg.level || 'unknown');
+      emit('world', raw || msg);
+      break;
     case 'map':
       cache.map = raw || JSON.stringify(msg);
       cache.mapVersion++;
@@ -139,7 +185,7 @@ telem.on('message', (buf, rinfo) => {
   try { msg = JSON.parse(str); } catch { return; }
   const fromGe = msg.vid === undefined; // vehicle VM messages carry their vehicle id
   if (fromGe && !CFG.gameHost) geAddr = { address: rinfo.address, port: CFG.gameCmdPort };
-  if (msg.t === 'veh') lastModVeh = Date.now();
+  if (msg.t === 'veh' && !isOtherCar(msg)) lastModVeh = Date.now();
   if (demo.active) demo.stop();
   const reconnect = fromGe && Date.now() - lastGe > 10000;
   handleMessage(msg, str, fromGe);
@@ -183,12 +229,54 @@ function sendToGame(cmd) {
 // every car command goes through here (web pages, macros, Deck)
 function dispatch(cmd) {
   cmd.id = ++cmdId;
+  // handled by the server itself
+  if (cmd.type === 'lapLine') {
+    const L = { x1: +cmd.x1, y1: +cmd.y1, x2: +cmd.x2, y2: +cmd.y2, dir: cmd.dir || 0 };
+    return { ok: active().perf.setLine(L), id: cmd.id, routed: 'server' };
+  }
   if (cmd.type === 'adas' && cmd.settings) {
     Object.assign(prefs.adas, cmd.settings);
     saveJson('settings.json', prefs);
   }
   if (demo.active) demo.command(cmd); else sendToGame(cmd);
   return { ok: true, id: cmd.id, routed: demo.active ? 'demo' : 'game' };
+}
+
+// server-side actions (no game command needed)
+function serverAction(id) {
+  const s = active();
+  switch (id) {
+    case 'perf-reset': s.perf.resetBest(); return { ok: true };
+    case 'lap-reset': s.perf.resetLaps(); return { ok: true };
+    case 'lap-line-clear': s.perf.clearLine(); return { ok: true };
+    case 'lap-line-here': {
+      const l = cache.last;
+      if (!l || !l.pos || !l.dir) return { ok: false, err: 'No car position yet' };
+      const fl = Math.hypot(l.dir[0], l.dir[1]) || 1;
+      const fx = l.dir[0] / fl, fy = l.dir[1] / fl, rx = fy, ry = -fx, half = 15;
+      // line across the road at the car; "dir" = the side you cross towards (driving forward)
+      const L = { x1: l.pos[0] - rx * half, y1: l.pos[1] - ry * half, x2: l.pos[0] + rx * half, y2: l.pos[1] + ry * half };
+      const side = (L.x2 - L.x1) * (l.pos[1] + fy - L.y1) - (L.y2 - L.y1) * (l.pos[0] + fx - L.x1);
+      L.dir = Math.sign(side) || 1;
+      return { ok: s.perf.setLine(L) };
+    }
+    case 'drift-reset': s.fun.resetDrift(); return { ok: true };
+    case 'dyno-reset': s.fun.resetDyno(); return { ok: true };
+    case 'record-toggle': {
+      if (recorder.active) { const f = recorder.stop(); emit('toast', { text: `Recording saved: ${f}` }); }
+      else { const f = recorder.start(cache.info && cache.info.model ? cache.info.model.Name : ''); emit('toast', { text: 'Recording started' }); return { ok: true, file: f }; }
+      return { ok: true };
+    }
+    case 'watch-off': return dispatch({ type: 'watch', vid: null });
+    case 'watch-next': {
+      const list = ((cache.world && cache.world.vehicles) || []).filter((v) => !v.me).map((v) => v.id).sort((a, b) => a - b);
+      if (!list.length) return { ok: false, err: 'No other vehicles to watch' };
+      const cur = cache.world.watched;
+      const next = list.find((id) => id > (cur || -1));
+      return dispatch({ type: 'watch', vid: next === undefined ? null : next });
+    }
+  }
+  return { ok: false, err: `unknown server action ${id}` };
 }
 
 // keep announcing ourselves so the mod finds us (needed when the game is on another machine)
@@ -200,7 +288,7 @@ setInterval(() => {
 // ------------------------------------------------------------------ demo mode
 const demo = new Demo((type, msg) => handleMessage(msg, null, false));
 function startDemo() {
-  demoTrips = new Trips(null);
+  demoSet = freshDemoSet();
   demo.start();
   demo.command({ type: 'adas', settings: prefs.adas });
 }
@@ -211,15 +299,17 @@ setInterval(() => {
   if (quiet && !demo.active) { startDemo(); console.log('[demo] no game data - demo car running'); }
   media.demo = demo.active;
 }, 1000);
-demo.onStop = () => { cache.map = null; cache.info = null; cache.vars = null; cache.spec = null; media.demo = false; console.log('[demo] game connected - demo stopped'); };
+demo.onStop = () => { cache.map = null; cache.info = null; cache.vars = null; cache.spec = null; cache.dmg = null; media.demo = false; console.log('[demo] game connected - demo stopped'); };
 
-// ------------------------------------------------------------------ media + trips broadcast
+// ------------------------------------------------------------------ periodic broadcasts
 const media = new Media((s) => emit('media', s));
 media.start();
 setInterval(() => {
   emit('status', status());
-  emit('trips', activeTrips().snapshot());
+  emit('trips', active().trips.snapshot());
 }, 1000);
+setInterval(() => { emit('perf', active().perf.snapshot()); flushEvents(); }, 200);
+setInterval(() => emit('fun', active().fun.snapshot()), 500);
 
 // ------------------------------------------------------------------ http
 const MIME = {
@@ -246,12 +336,19 @@ async function runAction(id, q) {
   if (r.error) return { ok: false, err: r.error };
   if (r.none) return { ok: true };
   if (r.ui) { emit('ui', { action: r.ui }); return { ok: true, ui: r.ui }; }
-  if (r.trip) { activeTrips().reset(r.trip); emit('trips', activeTrips().snapshot()); return { ok: true, reset: r.trip }; }
+  if (r.trip) { active().trips.reset(r.trip); emit('trips', active().trips.snapshot()); return { ok: true, reset: r.trip }; }
+  if (r.srv) { const out = serverAction(r.srv); emit('status', status()); emit('perf', active().perf.snapshot()); return out; }
   if (r.media) {
     if (await media.command(r.media)) return { ok: true, media: r.media };
     return { ok: false, err: 'No media player found (install playerctl on the PC running the server)' };
   }
   return dispatch({ ...r.game });
+}
+
+function lanAddresses() {
+  const out = [];
+  for (const list of Object.values(os.networkInterfaces())) for (const ni of list || []) if (ni.family === 'IPv4' && !ni.internal) out.push(ni.address);
+  return out;
 }
 
 const server = http.createServer(async (req, res) => {
@@ -263,10 +360,12 @@ const server = http.createServer(async (req, res) => {
     res.write('retry: 1500\n\n');
     clients.add(res);
     sseWrite(res, 'status', JSON.stringify(status()));
-    for (const k of ['info', 'vars', 'spec', 'world', 'pt']) if (cache[k]) sseWrite(res, k, JSON.stringify(cache[k]));
+    for (const k of ['info', 'vars', 'spec', 'world', 'pt', 'dmg']) if (cache[k]) sseWrite(res, k, JSON.stringify(cache[k]));
     sseWrite(res, 'electrics', JSON.stringify({ t: 'electrics', e: cache.electrics }));
     sseWrite(res, 'media', JSON.stringify({ ...media.state, artFile: undefined }));
-    sseWrite(res, 'trips', JSON.stringify(activeTrips().snapshot()));
+    sseWrite(res, 'trips', JSON.stringify(active().trips.snapshot()));
+    sseWrite(res, 'perf', JSON.stringify(active().perf.snapshot()));
+    sseWrite(res, 'fun', JSON.stringify(active().fun.snapshot()));
     if (cache.map) sseWrite(res, 'mapver', JSON.stringify({ version: cache.mapVersion, level: cache.mapLevel }));
     const ka = setInterval(() => res.write(': ka\n\n'), 15000);
     req.on('close', () => { clearInterval(ka); clients.delete(res); });
@@ -284,11 +383,26 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (p === '/api/actions') { json(res, 200, actions.LIST); return; }
+  if (p === '/api/info') { json(res, 200, { version: VERSION, port: CFG.httpPort, hostname: os.hostname(), addresses: lanAddresses() }); return; }
   if (p === '/api/deck') {
     if (req.method === 'PUT' || req.method === 'POST') {
       try { deck = JSON.parse(await readBody(req)); saveJson('deck.json', deck); emit('deck', deck); json(res, 200, { ok: true }); }
       catch (e) { json(res, 400, { ok: false, err: e.message }); }
     } else json(res, 200, deck);
+    return;
+  }
+  // drive recordings (CSV)
+  if (p === '/api/recordings') { json(res, 200, { active: recorder.active, file: recorder.file, list: recorder.list() }); return; }
+  if (p.startsWith('/api/recordings/')) {
+    const f = recorder.safePath(decodeURIComponent(p.slice('/api/recordings/'.length)));
+    if (!f) { json(res, 404, { ok: false }); return; }
+    if (req.method === 'DELETE') {
+      if (recorder.file && f.endsWith(recorder.file)) { json(res, 400, { ok: false, err: 'Stop the recording first' }); return; }
+      fs.unlink(f, (e) => json(res, e ? 500 : 200, { ok: !e }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="${path.basename(f)}"` });
+    fs.createReadStream(f).pipe(res);
     return;
   }
   if (p === '/api/media/art') { media.sendArt(res); return; }
@@ -299,7 +413,10 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (p === '/api/state') {
-    json(res, 200, { status: status(), ...cache, map: undefined, trips: activeTrips().snapshot(), media: { ...media.state, artFile: undefined }, adasPrefs: prefs.adas });
+    json(res, 200, {
+      status: status(), ...cache, map: undefined, trips: active().trips.snapshot(), perf: active().perf.snapshot(),
+      fun: active().fun.snapshot(), media: { ...media.state, artFile: undefined }, adasPrefs: prefs.adas,
+    });
     return;
   }
 
@@ -315,12 +432,10 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.listen(CFG.httpPort, '0.0.0.0', () => {
-  console.log('\n  BeamDash is running. Open on any device on your network:\n');
+  console.log(`\n  BeamDash ${VERSION} is running. Open on any device on your network:\n`);
   console.log(`    http://localhost:${CFG.httpPort}`);
   console.log(`    http://${os.hostname()}:${CFG.httpPort}`);
-  for (const list of Object.values(os.networkInterfaces())) {
-    for (const ni of list || []) if (ni.family === 'IPv4' && !ni.internal) console.log(`    http://${ni.address}:${CFG.httpPort}`);
-  }
+  for (const a of lanAddresses()) console.log(`    http://${a}:${CFG.httpPort}`);
   console.log(`\n  Game host: ${CFG.gameHost || 'auto (same PC / learned from the mod)'}   demo: ${CFG.demo}`);
-  console.log(`  Deck (button pad):  /deck      Macros & shortcuts:  /macros\n`);
+  console.log(`  Connect a phone (QR codes): /connect   Deck: /deck   HUD: /hud   Macros: /macros\n`);
 });

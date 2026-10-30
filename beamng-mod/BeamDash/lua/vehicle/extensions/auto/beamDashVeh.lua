@@ -9,6 +9,7 @@ local udp = nil
 local fastTimer, wheelTimer, fullTimer, ptTimer, specTimer = 0, 0, 0, 0, 0
 local FAST, WHEEL, FULL, PT, SPEC = 1 / 30, 1 / 15, 1 / 4, 1 / 4, 5
 local starterTimer = 0
+local dmgTick = false
 local seq = 0
 
 -- keys sent at the high rate; everything else in electrics goes in the 4 Hz full dump
@@ -72,9 +73,12 @@ local function send(msg)
   if ok and str then pcall(function() udp:sendto(str, host, port) end) end
 end
 
+-- streams when you drive this car, or when a BeamDash screen asked to watch it (spectate AI / other cars)
+local watched = false
 local function isActive()
-  return playerInfo and playerInfo.firstPlayerSeated
+  return watched or (playerInfo and playerInfo.firstPlayerSeated)
 end
+M.setWatched = function(on) watched = on and true or false end
 
 local function vecTbl(v)
   if not v then return nil end
@@ -124,6 +128,87 @@ local function energyData()
   return out
 end
 
+-- propulsion power for EVs / hybrids / the virtual dyno (kW, Nm), plus traction battery state
+local function powerData(e)
+  local engP, engT, motP, motT = 0, 0, 0, 0
+  local hasEng, hasMot = false, false
+  pcall(function()
+    for _, d in pairs(powertrain.getDevicesByType("combustionEngine") or {}) do
+      hasEng = true
+      local tq, av = d.outputTorque1 or 0, d.outputAV1 or 0
+      engT = engT + tq
+      engP = engP + tq * av
+    end
+    for _, d in pairs(powertrain.getDevicesByType("electricMotor") or {}) do
+      hasMot = true
+      local tq, av = d.outputTorque1 or 0, d.outputAV1 or 0
+      motT = motT + tq
+      motP = motP + tq * av
+    end
+  end)
+  e.bd_engTorque = num(engT)
+  e.bd_engPower = num(engP / 1000)
+  e.bd_motorTorque = num(motT)
+  e.bd_motorPower = num(motP / 1000) -- negative = regenerating
+  e.bd_hasEngine = hasEng
+  e.bd_hasMotor = hasMot
+  pcall(function()
+    for _, st in pairs(energyStorage.getStorages()) do
+      if st.energyType == "electricEnergy" then
+        e.bd_battery = num(st.remainingRatio or 0)
+        if st.storedEnergy then e.bd_batteryKwh = num(st.storedEnergy / 3600000) end
+        if st.energyCapacity then e.bd_batteryCapKwh = num(st.energyCapacity / 3600000) end
+        break
+      end
+    end
+  end)
+end
+
+-- damage: total, damage-tracker flags, broken drivetrain parts, flat / broken wheels, deformed parts
+local function damageData()
+  local out = { t = "dmg", total = 0, flags = {}, broken = {}, wheels = {}, deform = {} }
+  pcall(function() out.total = num(beamstate.damage or 0) end)
+  pcall(function()
+    local tracker = rawget(_G, "damageTracker")
+    if not tracker then return end
+    local data = (type(tracker.getDamageData) == "function" and tracker.getDamageData()) or rawget(tracker, "damageData")
+    if type(data) ~= "table" then return end
+    for group, list in pairs(data) do
+      if type(list) == "table" then
+        for name, val in pairs(list) do
+          if val == true then out.flags[group .. "." .. name] = 1
+          elseif type(val) == "number" and val > 0 then out.flags[group .. "." .. name] = num(val) end
+        end
+      end
+    end
+  end)
+  pcall(function()
+    for name, dev in pairs(powertrain.getDevices()) do
+      if dev.isBroken then table.insert(out.broken, name) end
+    end
+  end)
+  pcall(function()
+    for _, wd in pairs(wheels.wheelRotators) do
+      if wd.isBroken or wd.isTireDeflated then
+        table.insert(out.wheels, { name = wd.name, broken = wd.isBroken and true or false, flat = wd.isTireDeflated and true or false })
+      end
+    end
+  end)
+  pcall(function()
+    local groups = rawget(beamstate, "deformGroupDamage")
+    if type(groups) ~= "table" then return end
+    for name, g in pairs(groups) do
+      local dmg = type(g) == "table" and g.damage or nil
+      if type(dmg) == "number" and dmg > 0.01 then out.deform[name] = num(dmg) end
+    end
+  end)
+  pcall(function()
+    local e = powertrain.getDevicesByType("combustionEngine")[1]
+    if e then out.engine = { stalled = e.isStalled and true or false, disabled = e.isDisabled and true or false } end
+  end)
+  return out
+end
+
 local function controllerNames()
   local names = {}
   pcall(function()
@@ -138,7 +223,9 @@ local function sendSpec()
   local spec = { t = "spec", engine = {}, gearbox = {}, controllers = controllerNames() }
   pcall(function()
     local engines = powertrain.getDevicesByType("combustionEngine")
+    local motors = powertrain.getDevicesByType("electricMotor")
     local e = engines and engines[1]
+    spec.engine.hybrid = (e ~= nil) and motors ~= nil and motors[1] ~= nil
     if not e then
       local motors = powertrain.getDevicesByType("electricMotor")
       e = motors and motors[1]
@@ -216,6 +303,7 @@ local function updateGFX(dt)
         e.cruiseControlTarget = num(cs.target)
       end
     end
+    powerData(e)
     local msg = { t = "veh", e = e }
     pcall(function()
       msg.g = { num(sensors.gx2 or sensors.gx or 0), num(sensors.gy2 or sensors.gy or 0), num(sensors.gz2 or sensors.gz or 0) }
@@ -242,6 +330,8 @@ local function updateGFX(dt)
     local msg = { t = "pt", pt = powertrainData(), energy = energyData() }
     pcall(function() msg.damage = num(beamstate.damage or 0) end)
     send(msg)
+    dmgTick = not dmgTick
+    if dmgTick then send(damageData()) end -- 2 Hz
   end
 
   if specTimer >= SPEC then

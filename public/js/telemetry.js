@@ -226,6 +226,32 @@
   }
   setInterval(renderTrips, 1000);
 
+  // power / EV / hybrid + damage
+  setInterval(() => {
+    const d = BD.data();
+    const type = d.isEV ? 'Electric' : d.isHybrid ? 'Hybrid' : 'Combustion';
+    $('ptype').textContent = type + (d.watching ? ` · watching #${d.watching}` : '');
+    const t = (BD.st.trips || {}).a || {};
+    kv($('energyKv'), [
+      ['Engine power', `${f(Math.max(0, d.engKw), 0)} kW · ${f(Math.max(0, d.engKw) * 1.341, 0)} hp`], ['Engine torque', `${f(Math.max(0, d.engNm), 0)} Nm`],
+      ['Motor power', d.isEV || d.isHybrid ? `${f(d.motorKw, 1)} kW ${d.motorKw < -0.5 ? '(regen)' : ''}` : '—'],
+      ['Battery', d.battery !== null ? `${f(d.battery * 100, 1)} %${d.batteryKwh !== null ? ` · ${f(d.batteryKwh, 2)} kWh` : ''}` : '—'],
+      ['Trip A energy used', d.isEV || d.isHybrid ? `${f(t.energy || 0, 2)} kWh` : '—'], ['Trip A regen', d.isEV || d.isHybrid ? `${f(t.regen || 0, 2)} kWh` : '—'],
+      ['Eco score (trip A)', t.eco !== null && t.eco !== undefined ? `${t.eco} / 100` : '—'],
+    ]);
+    const dm = BD.st.dmg;
+    const el = $('damage');
+    if (!dm) { if (el._h !== 'none') { el._h = 'none'; el.innerHTML = '<p class="muted">No damage data</p>'; } return; }
+    const items = [
+      ...Object.keys(dm.flags || {}).map((k) => `<span class="pill warn">${esc(k)}</span>`),
+      ...(dm.broken || []).map((b) => `<span class="pill bad">broken: ${esc(b)}</span>`),
+      ...(dm.wheels || []).map((w) => `<span class="pill bad">${esc(w.name)} ${w.broken ? 'wheel broken' : 'flat'}</span>`),
+      ...Object.entries(dm.deform || {}).sort((a, b) => b[1] - a[1]).slice(0, 20).map(([n, v]) => `<span class="pill">${esc(n)} ${Math.round(Math.min(1, v) * 100)}%</span>`),
+    ];
+    const html = `<div class="kv" style="margin-bottom:8px"><span>Total damage</span><span>${f(dm.total || 0, 0)}</span><span>Engine</span><span>${dm.engine ? (dm.engine.disabled ? 'disabled' : dm.engine.stalled ? 'stalled' : 'ok') : '—'}</span></div><div class="lights">${items.join('') || '<span class="pill on">no broken parts</span>'}</div>`;
+    if (el._h !== html) { el._h = html; el.innerHTML = html; }
+  }, 500);
+
   setInterval(update, 100);
   setInterval(() => { renderTires(BD.data()); }, 200);
   setInterval(renderPt, 1000);

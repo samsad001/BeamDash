@@ -22,6 +22,7 @@
       stat('Power', cf.Power ? `${Math.round(cf.Power)} PS / ${Math.round(cf.Power * 0.986)} hp` : null),
       stat('Torque', cf.Torque ? `${Math.round(cf.Torque)} Nm` : null),
       stat('Weight', cf.Weight ? `${Math.round(cf.Weight)} kg` : null),
+      stat('Powertrain', (() => { const d = BD.data(); return d.isEV ? 'Electric' : d.isHybrid ? 'Hybrid' : 'Combustion'; })()),
       stat('Drivetrain', cf.Drivetrain), stat('Transmission', cf.Transmission), stat('Fuel', cf['Fuel Type']),
       stat('Induction', cf['Induction Type']), stat('Top speed', cf['Top Speed'] ? kmh(cf['Top Speed']) : null),
       stat(BD.settings.speedUnit === 'mph' ? '0-60 mph' : '0-100 km/h', BD.settings.speedUnit === 'mph' ? (cf['0-60 mph'] ? `${(+cf['0-60 mph']).toFixed(1)} s` : null) : (cf['0-100 km/h'] ? `${(+cf['0-100 km/h']).toFixed(1)} s` : null)),

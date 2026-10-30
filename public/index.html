@@ -63,6 +63,19 @@
           <label class="row"><span>Assist chips on classic designs</span><span class="switch"><input type="checkbox" id="assistChips"><i></i></span></label>
           <label class="row"><span>On-screen ◀ OK ▶ page buttons</span><span class="switch"><input type="checkbox" id="wheelButtons"><i></i></span></label>
         </div>
+        <div class="card"><h3>Chimes &amp; alerts</h3>
+          <label class="row"><span>Speed warning at (0 = off)</span><input type="number" id="speedWarn" min="0" max="400" step="5"></label>
+          <label class="row"><span>Warn when over the speed limit</span><span class="switch"><input type="checkbox" id="limitWarn"><i></i></span></label>
+          <label class="row"><span>…by more than</span><input type="number" id="limitTol" min="0" max="30" step="1"></label>
+          <label class="row"><span>Low fuel / battery chime</span><span class="switch"><input type="checkbox" id="lowFuelChime"><i></i></span></label>
+          <label class="row"><span>Shift beep at the shift light</span><span class="switch"><input type="checkbox" id="shiftBeep"><i></i></span></label>
+          <label class="row"><span>Dim at night (in-game clock)</span><span class="switch"><input type="checkbox" id="autoDim"><i></i></span></label>
+          <label class="row"><span>Spoken navigation</span><span class="switch"><input type="checkbox" id="voice"><i></i></span></label>
+        </div>
+        <div class="card"><h3>Info pages</h3>
+          <label class="row"><span>Portrait screens: pinned lower page</span><select id="portraitPage"></select></label>
+          <div id="pageToggles" style="display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin-top:8px"></div>
+        </div>
       </div>
     </div>
   </section>
@@ -75,6 +88,7 @@
   <script src="/js/gauges.js"></script>
   <script src="/js/mapview.js"></script>
   <script src="/js/mfd.js"></script>
+  <script src="/js/alerts.js"></script>
   <script src="/js/designs.js"></script>
   <script src="/js/assist.js"></script>
   <script src="/js/cluster.js"></script>

@@ -52,6 +52,17 @@ const LIST = [
   { id: 'trip-b-reset', label: 'Reset Trip B', group: 'Trip computer', trip: 'b' },
   { id: 'economy-reset', label: 'Reset fuel economy', group: 'Trip computer', trip: 'econ' },
   { id: 'start-reset', label: 'Reset "since start"', group: 'Trip computer', trip: 'start' },
+  // performance, laps, recording, spectating
+  { id: 'perf-reset', label: 'Reset performance bests', group: 'Performance & laps', srv: 'perf-reset' },
+  { id: 'lap-line-here', label: 'Set start/finish at my car', group: 'Performance & laps', srv: 'lap-line-here' },
+  { id: 'lap-line-clear', label: 'Remove start/finish line', group: 'Performance & laps', srv: 'lap-line-clear' },
+  { id: 'lap-reset', label: 'Reset lap times', group: 'Performance & laps', srv: 'lap-reset' },
+  { id: 'drift-reset', label: 'Reset best drift', group: 'Performance & laps', srv: 'drift-reset' },
+  { id: 'dyno-reset', label: 'Reset dyno (this car)', group: 'Performance & laps', srv: 'dyno-reset' },
+  { id: 'record-toggle', label: 'Start / stop recording', group: 'Recording & spectating', srv: 'record-toggle' },
+  { id: 'watch-next', label: 'Watch next car', group: 'Recording & spectating', srv: 'watch-next' },
+  { id: 'watch-off', label: 'Back to my car', group: 'Recording & spectating', srv: 'watch-off' },
+  { id: 'voice-toggle', label: 'Voice navigation on / off', group: 'Cluster', ui: 'voice' },
   // media (desktop player via playerctl)
   { id: 'media-play-pause', label: 'Media play / pause', group: 'Media', media: 'play-pause' },
   { id: 'media-next', label: 'Media next track', group: 'Media', media: 'next' },
@@ -68,6 +79,7 @@ function resolve(id, q, cache) {
   if (q.state === 'up') return a.release ? { game: a.release } : { none: true };
   if (a.ui) return { ui: a.ui };
   if (a.trip) return { trip: a.trip };
+  if (a.srv) return { srv: a.srv };
   if (a.media) return { media: a.media };
   if (a.game) return { game: a.game };
   const e = cache.electrics || {};
