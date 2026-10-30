@@ -3,7 +3,7 @@
 <p align="center"><b>Live gauge clusters, telemetry and car control for BeamNG.drive, on your phone, tablet or second screen.</b></p>
 
 <p align="center">
-  <a href="https://github.com/samsad001/BeamDash/releases"><img src="https://img.shields.io/badge/release-alpha%200.01-ff7a2a?style=for-the-badge" alt="Release alpha 0.01"></a>
+  <a href="https://github.com/samsad001/BeamDash/releases"><img src="https://img.shields.io/badge/release-alpha%200.02-ff7a2a?style=for-the-badge" alt="Release alpha 0.02"></a>
   <img src="https://img.shields.io/badge/BeamNG.drive-0.32%2B-2f80ff?style=for-the-badge" alt="BeamNG.drive 0.32+">
   <img src="https://img.shields.io/badge/Node.js-18%2B-3c873a?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js 18+">
   <img src="https://img.shields.io/badge/dependencies-0-8a95a8?style=for-the-badge" alt="Zero dependencies">
@@ -21,12 +21,16 @@
 </p>
 
 > [!WARNING]
-> **Alpha 0.01.** Cruise control and adaptive cruise don't respond in-game in this release: the mod looks for a cruise *controller*, but BeamNG provides cruise as a vehicle *extension*. Everything else works. A fix is planned for the next release.
+> **Alpha 0.02.** Cruise control and adaptive cruise don't respond in-game in this release: the mod looks for a cruise *controller*, but BeamNG provides cruise as a vehicle *extension*. Everything else works. A fix is planned for the next release.
 
 ## ✨ Features
 
-- 🎛️ **16 gauge-cluster designs** from the 1970s to 2026 (US, Euro, Japanese, a race display and a Custom Builder). Every one is customizable: colours, needles, units, redline, shift light, brightness.
+- 🎛️ **20 gauge-cluster designs** from the 1970s to 2026 (US, Euro, Japanese, a race display and a Custom Builder). Every one is customizable: colours, needles, units, redline, shift light, brightness.
 - 🚗 **Works with every car**, stock or modded. Spawn a car and its details load automatically.
+- 🔁 **Info pages like a real car**, flipped with ◀ OK ▶, swipes, keys or macros: trip computer, economy, now playing, nav, assist, digital speed, tires, G-force, engine, vehicle & service.
+- 🧮 **Trip computer**: Trip A, Trip B, Since start and a resettable fuel economy, kept on the server so every screen agrees. Hold OK to reset.
+- 🎚️ **Deck**: a Stream Deck-style button pad for a second phone, plus a **URL for every function** for Elgato Stream Deck, Companion, Touch Portal or keyboard shortcuts.
+- 🎵 **Now playing** from your PC (Linux, via playerctl), with album art and controls.
 - 📊 **Live telemetry**: tire and brake temperatures, pressures, slip and load per wheel, engine and drivetrain, G-force, live charts, and every one of the ~200 values the game's UI apps can read.
 - 🗺️ **Live map**: the level's real road network with every vehicle and your GPS route. Tap to navigate and the route appears in the game too.
 - 🛡️ **Drive assist**: cruise control, adaptive cruise with 4 following distances, forward collision warning, emergency braking, blind-spot monitor, speed-limit signs, ESC and drive modes.
@@ -34,18 +38,19 @@
 - 📱 **Phone, iPad or desktop**, installable as an app. A built-in **demo car** lets you try everything without the game.
 - 🪶 **Tiny and self-contained**: a Node.js server with zero dependencies, no build step, OutGauge fallback without the mod.
 
-<p align="center"><img src="media/designs.png" alt="All 16 cluster designs" width="100%"></p>
+<p align="center"><img src="media/designs.png" alt="All 20 cluster designs" width="100%"></p>
 
 ## 📸 Screenshots
 
 <table>
 <tr><td width="50%"><img src="media/screenshots/page-cluster-ui.png" alt="Cluster with controls (iPad)"><br><sub><b>Cluster with controls (iPad)</b></sub></td><td width="50%"><img src="media/screenshots/page-telemetry.png" alt="Telemetry"><br><sub><b>Telemetry</b></sub></td></tr>
 <tr><td width="50%"><img src="media/screenshots/page-map.png" alt="Map & navigation"><br><sub><b>Map & navigation</b></sub></td><td width="50%"><img src="media/screenshots/page-garage.png" alt="Garage & tuning"><br><sub><b>Garage & tuning</b></sub></td></tr>
+<tr><td width="50%"><img src="media/screenshots/page-macros.png" alt="Macros (Stream Deck URLs)"><br><sub><b>Macros (Stream Deck URLs)</b></sub></td><td width="50%"><img src="media/screenshots/page-deck.png" alt="Deck button pad"><br><sub><b>Deck button pad</b></sub></td></tr>
 </table>
 
 ## 🚀 Quick start
 
-1. **Download** `BeamDash-alpha-0.01.zip` from the [Releases page](https://github.com/samsad001/BeamDash/releases) and unzip it anywhere.
+1. **Download** `BeamDash-alpha-0.02.zip` from the [Releases page](https://github.com/samsad001/BeamDash/releases) and unzip it anywhere.
 2. **Install the mod:** put `BeamDash-mod.zip` in your BeamNG `mods` folder, or run `bash install-mod.sh` (Linux) / `install-mod.ps1` (Windows). Don't put the whole download in `mods`.
 3. **Start the server:** `bash start-server.sh` (Linux) or `start-server.bat` (Windows). You need [Node.js](https://nodejs.org) 18 or newer.
 4. **Open the address it prints** (e.g. `http://192.168.1.20:8080`) on your phone, iPad or PC, and spawn a car in BeamNG.
@@ -71,12 +76,13 @@ Phones, iPads and other PCs just open the website. Until a game is connected, th
 ## 2. Server on Linux
 
 ```bash
-sudo apt install nodejs          # Debian/Ubuntu; Fedora: sudo dnf install nodejs; Arch: sudo pacman -S nodejs
+sudo pacman -S nodejs playerctl  # CachyOS/Arch. Debian/Ubuntu: sudo apt install nodejs playerctl
 node -v                          # must be 18 or newer, otherwise install the LTS from https://nodejs.org
-cp -r BeamDash /opt/BeamDash     # any folder works
-cd /opt/BeamDash
+cd ~/BeamDash                    # wherever you copied the folder
 bash start-server.sh             # add --game-host <game PC IP> if BeamNG runs on another machine
 ```
+
+`playerctl` is optional: it powers the **Now playing** page. Run the server as your normal user (not root / sudo), or it can't see your music player.
 
 It prints the addresses to open on your phone, e.g. `http://my-pc:8080` or `http://192.168.x.x:8080`.
 
@@ -90,13 +96,19 @@ sudo ufw allow 4444/udp    # optional OutGauge fallback
 
 With `firewalld`: `sudo firewall-cmd --permanent --add-port=8080/tcp --add-port=4445/udp && sudo firewall-cmd --reload`.
 
-**Start at boot** (optional): edit `User=` and the paths in `beamdash.service`, then:
+**Start automatically when you log in** (optional): change the two `/home/YOU/BeamDash` paths in `beamdash.service`, then:
 
 ```bash
-sudo cp beamdash.service /etc/systemd/system/
-sudo systemctl daemon-reload && sudo systemctl enable --now beamdash
-journalctl -u beamdash -f    # live log
+mkdir -p ~/.config/systemd/user
+cp beamdash.service ~/.config/systemd/user/
+systemctl --user daemon-reload
+systemctl --user enable --now beamdash
+journalctl --user -u beamdash -f    # live log;  stop: systemctl --user stop beamdash
 ```
+
+It's a *user* service (no sudo) so Now playing works.
+
+Settings that must be shared (ADAS choices, trip counters, the Deck layout) are saved in the `data/` folder next to `server/`.
 
 ## 3. Install the mod (on the machine that runs BeamNG)
 
@@ -136,7 +148,32 @@ Optional: the mod also reads `settings/beamDash.json` in the BeamNG user folder 
 - **Android (Chrome)**: menu → **Install app** / **Add to Home screen**.
 - **Desktop (Chrome / Edge)**: the install icon in the address bar.
 
-Tips: use landscape on phones. Tap the cluster to hide or show the controls. On desktop, the ← → keys switch designs, `A` opens Drive Assist, and `H` hides the controls.
+Tips: use landscape on phones. Tap the cluster to hide or show the controls.
+
+### Using the cluster like a real car
+
+| Control | What it does |
+|---|---|
+| **◀ / ▶** (right edge), swipe left/right, or ← → keys | Flip through the info pages |
+| **OK** (or Enter) | The page's main function: switch Trip A/B/Since start, play/pause, zoom the map, change ACC distance, reset G peak |
+| **Hold OK** (0.7 s) | Reset: the trip you're looking at, or the fuel-economy average |
+| **⟲** (or Backspace) | Back to the first page |
+| Swipe up/down, or Page Up / Page Down | Change design |
+| `H` / `A` | Hide the controls / open Drive Assist |
+
+Designs with a screen (all 2010s/2020s ones, Skyline, Porsche-style, truck) show the pages on it. Classic designs show a pop-up for a few seconds, like a real trip computer. The E46-style "Bavaria M" shows them in its check-control LCD. You can set these buttons off in Customize.
+
+### Deck and macros
+
+- **Deck** (`/deck`): open it on a second phone. 2 pages of buttons by default (signals, hazard, lights, cruise, ACC, horn, park brake, page flip / media, assists, trip resets, engine, repair…). Buttons light up live. Tap **Edit** to change actions, labels, colours, columns or pages; the layout is shared by every device.
+- **Macros** (`/macros`): every action's URL, e.g. `http://192.168.1.20:8080/api/action/signal-left`. Use it from:
+  - **KDE** (works while BeamNG has focus): System Settings → Keyboard → Shortcuts → Add New → Command: `curl -s http://localhost:8080/api/action/hazard`
+  - **Elgato Stream Deck**: free *API Ninja* or *Web Requests* plugin, GET the URL. **Linux StreamController**: *Run command* with curl.
+  - **Bitfocus Companion / Touch Portal**: HTTP GET.
+  - Hold actions (horn): call the URL to press, add `?state=up` to release. Cruise ± take `?step=5&unit=mph`.
+  - The Macros page also sets **keyboard shortcuts** for when a BeamDash tab is focused.
+
+The action URLs have no password. Anyone on your home network who can open the site can use them, so don't expose port 8080 to the internet.
 
 ## 6. Cluster designs
 
@@ -156,6 +193,10 @@ Tips: use landscape on phones. Tap the cluster to hide or show the controls. On 
 | 2020s | **Bavaria Live '22** | BMW Live Cockpit (G20): follows drive mode colours, map or traffic view |
 | 2020s | **Bavaria Curved '26** | Latest BMW curved display: 3-D surround traffic, ACC, nav, vitals |
 | 2020s | Pleiades '22 | Subaru WRX (VB): EyeSight, boost, G or tire screens |
+| 1990s | Neo Skyline '99 | Nissan Skyline GT-R (R34): centre tach, boost pod, blue multi-function display |
+| 2010s | **Bavaria Black Panel '12** | BMW F10/F30: white-on-black dials, orange screen between them, sport mode |
+| 2010s | Stuttgart Five-Dial '19 | Porsche 911 (992): big analog tach between two screens |
+| 2010s | Heartland Pickup '19 | US full-size pickup: 6 gauges, centre screen, PRNDL |
 | Custom | Motorsport Pro | Race display: shift lights, tire/brake temps, alarms |
 | Custom | Custom Builder | Choose layout, dial style, centre widget, fonts and every colour |
 
@@ -194,6 +235,10 @@ BeamDash/
   install-mod.ps1           build + install the BeamNG mod (Windows)
   BeamDash-mod.zip          the mod, ready to drop into BeamNG's mods folder
   server/server.js          web server, UDP bridge, OutGauge fallback (no npm install needed)
+  server/actions.js         every named action (macros, Deck)
+  server/trips.js           trip computer
+  server/media.js           now playing (playerctl)
+  data/                     saved trips, ADAS settings, Deck layout (created on first run)
   server/demo.js            demo car used when the game isn't connected
   public/                   the web app (cluster, telemetry, map, garage)
     js/designs.js           all cluster designs; add your own with reg({...})

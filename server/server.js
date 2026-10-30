@@ -1,6 +1,6 @@
 // BeamDash server - zero dependencies (Node 18+).
 // BeamNG mod --UDP--> this server --Server-Sent Events--> phones / iPads / desktops
-// browser --HTTP POST /api/cmd--> this server --UDP--> BeamNG mod
+// browser / macros --HTTP--> this server --UDP--> BeamNG mod
 'use strict';
 const http = require('http');
 const dgram = require('dgram');
@@ -8,6 +8,9 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { Demo } = require('./demo');
+const actions = require('./actions');
+const { Media } = require('./media');
+const { Trips } = require('./trips');
 
 // ------------------------------------------------------------------ config
 const args = process.argv.slice(2);
@@ -26,6 +29,19 @@ const CFG = {
   demo: arg('demo', 'auto'), // auto | on | off
 };
 const PUBLIC = path.join(__dirname, '..', 'public');
+
+// ------------------------------------------------------------------ saved settings (data/*.json)
+const DATA = path.join(__dirname, '..', 'data');
+fs.mkdirSync(DATA, { recursive: true });
+const loadJson = (name, def) => { try { return JSON.parse(fs.readFileSync(path.join(DATA, name), 'utf8')); } catch { return def; } };
+const saveJson = (name, obj) => fs.writeFile(path.join(DATA, name), JSON.stringify(obj, null, 2), (e) => e && console.error('[data]', e.message));
+// ADAS choices live on the server so every phone, macro and game restart sees the same settings
+const prefs = loadJson('settings.json', { adas: { fcw: true, fcwSens: 2, aeb: false, bsm: true, tsr: true, accGap: 2 } });
+let deck = loadJson('deck.json', null);
+// real trips are saved; the demo car gets its own throw-away counters
+const trips = new Trips(loadJson('trips.json', null));
+let demoTrips = new Trips(null);
+setInterval(() => { if (trips.dirty) { trips.dirty = false; saveJson('trips.json', trips.t); } }, 10000);
 
 // ------------------------------------------------------------------ state
 const cache = {
@@ -63,13 +79,18 @@ function status() {
   };
 }
 
+const activeTrips = () => (demo.active ? demoTrips : trips);
+
 // ------------------------------------------------------------------ incoming game data
 const chunks = new Map();
 
 function handleMessage(msg, raw, fromGe) {
   switch (msg.t) {
     case 'veh':
-      if (msg.e) Object.assign(cache.electrics, msg.e);
+      if (msg.e) {
+        Object.assign(cache.electrics, msg.e);
+        activeTrips().update(cache.electrics);
+      }
       emit('veh', raw || msg);
       break;
     case 'electrics':
@@ -78,7 +99,11 @@ function handleMessage(msg, raw, fromGe) {
       break;
     case 'pt': cache.pt = msg; emit('pt', raw || msg); break;
     case 'spec': cache.spec = msg; emit('spec', raw || msg); break;
-    case 'info': cache.info = msg; cache.electrics = {}; emit('info', raw || msg); break;
+    case 'info':
+      if (!cache.info || cache.info.vid !== msg.vid || cache.info.jbeam !== msg.jbeam) activeTrips().newJourney();
+      cache.info = msg; cache.electrics = {};
+      emit('info', raw || msg);
+      break;
     case 'vars': cache.vars = msg; emit('vars', raw || msg); break;
     case 'world': cache.world = msg; emit('world', raw || msg); break;
     case 'map':
@@ -116,7 +141,9 @@ telem.on('message', (buf, rinfo) => {
   if (fromGe && !CFG.gameHost) geAddr = { address: rinfo.address, port: CFG.gameCmdPort };
   if (msg.t === 'veh') lastModVeh = Date.now();
   if (demo.active) demo.stop();
+  const reconnect = fromGe && Date.now() - lastGe > 10000;
   handleMessage(msg, str, fromGe);
+  if (reconnect) sendToGame({ type: 'adas', settings: prefs.adas }); // game (re)started: restore ADAS choices
 });
 telem.on('error', (e) => console.error('[udp telemetry]', e.message));
 telem.bind(CFG.telemetryPort, '0.0.0.0', () => {
@@ -153,6 +180,17 @@ function sendToGame(cmd) {
   telem.send(buf, target.port, target.address);
 }
 
+// every car command goes through here (web pages, macros, Deck)
+function dispatch(cmd) {
+  cmd.id = ++cmdId;
+  if (cmd.type === 'adas' && cmd.settings) {
+    Object.assign(prefs.adas, cmd.settings);
+    saveJson('settings.json', prefs);
+  }
+  if (demo.active) demo.command(cmd); else sendToGame(cmd);
+  return { ok: true, id: cmd.id, routed: demo.active ? 'demo' : 'game' };
+}
+
 // keep announcing ourselves so the mod finds us (needed when the game is on another machine)
 setInterval(() => {
   if (demo.active && !CFG.gameHost && !lastGe) return;
@@ -161,15 +199,27 @@ setInterval(() => {
 
 // ------------------------------------------------------------------ demo mode
 const demo = new Demo((type, msg) => handleMessage(msg, null, false));
-if (CFG.demo === 'on') demo.start();
+function startDemo() {
+  demoTrips = new Trips(null);
+  demo.start();
+  demo.command({ type: 'adas', settings: prefs.adas });
+}
+if (CFG.demo === 'on') startDemo();
 setInterval(() => {
   if (CFG.demo !== 'auto') return;
   const quiet = Date.now() - Math.max(lastModVeh, lastOutgauge, lastGe) > 4000;
-  if (quiet && !demo.active) { demo.start(); console.log('[demo] no game data - demo car running'); }
+  if (quiet && !demo.active) { startDemo(); console.log('[demo] no game data - demo car running'); }
+  media.demo = demo.active;
 }, 1000);
-demo.onStop = () => { cache.map = null; cache.info = null; cache.vars = null; cache.spec = null; console.log('[demo] game connected - demo stopped'); };
+demo.onStop = () => { cache.map = null; cache.info = null; cache.vars = null; cache.spec = null; media.demo = false; console.log('[demo] game connected - demo stopped'); };
 
-setInterval(() => emit('status', status()), 1000);
+// ------------------------------------------------------------------ media + trips broadcast
+const media = new Media((s) => emit('media', s));
+media.start();
+setInterval(() => {
+  emit('status', status());
+  emit('trips', activeTrips().snapshot());
+}, 1000);
 
 // ------------------------------------------------------------------ http
 const MIME = {
@@ -186,6 +236,23 @@ function readBody(req) {
     req.on('error', reject);
   });
 }
+const json = (res, code, obj) => {
+  res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' });
+  res.end(JSON.stringify(obj));
+};
+
+async function runAction(id, q) {
+  const r = actions.resolve(id, q, cache);
+  if (r.error) return { ok: false, err: r.error };
+  if (r.none) return { ok: true };
+  if (r.ui) { emit('ui', { action: r.ui }); return { ok: true, ui: r.ui }; }
+  if (r.trip) { activeTrips().reset(r.trip); emit('trips', activeTrips().snapshot()); return { ok: true, reset: r.trip }; }
+  if (r.media) {
+    if (await media.command(r.media)) return { ok: true, media: r.media };
+    return { ok: false, err: 'No media player found (install playerctl on the PC running the server)' };
+  }
+  return dispatch({ ...r.game });
+}
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
@@ -198,23 +265,33 @@ const server = http.createServer(async (req, res) => {
     sseWrite(res, 'status', JSON.stringify(status()));
     for (const k of ['info', 'vars', 'spec', 'world', 'pt']) if (cache[k]) sseWrite(res, k, JSON.stringify(cache[k]));
     sseWrite(res, 'electrics', JSON.stringify({ t: 'electrics', e: cache.electrics }));
+    sseWrite(res, 'media', JSON.stringify({ ...media.state, artFile: undefined }));
+    sseWrite(res, 'trips', JSON.stringify(activeTrips().snapshot()));
     if (cache.map) sseWrite(res, 'mapver', JSON.stringify({ version: cache.mapVersion, level: cache.mapLevel }));
     const ka = setInterval(() => res.write(': ka\n\n'), 15000);
     req.on('close', () => { clearInterval(ka); clients.delete(res); });
     return;
   }
   if (p === '/api/cmd' && req.method === 'POST') {
-    try {
-      const cmd = JSON.parse(await readBody(req));
-      cmd.id = ++cmdId;
-      if (demo.active) demo.command(cmd); else sendToGame(cmd);
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ ok: true, id: cmd.id, routed: demo.active ? 'demo' : 'game' }));
-    } catch (e) {
-      res.writeHead(400); res.end(JSON.stringify({ ok: false, err: e.message }));
-    }
+    try { json(res, 200, dispatch(JSON.parse(await readBody(req)))); } catch (e) { json(res, 400, { ok: false, err: e.message }); }
     return;
   }
+  // macros: GET or POST /api/action/<id>?step=5&unit=mph  (Stream Deck, KDE shortcuts, curl, Deck page)
+  if (p.startsWith('/api/action/')) {
+    const id = decodeURIComponent(p.slice('/api/action/'.length));
+    const r = await runAction(id, Object.fromEntries(url.searchParams));
+    json(res, r.ok === false ? 400 : 200, r);
+    return;
+  }
+  if (p === '/api/actions') { json(res, 200, actions.LIST); return; }
+  if (p === '/api/deck') {
+    if (req.method === 'PUT' || req.method === 'POST') {
+      try { deck = JSON.parse(await readBody(req)); saveJson('deck.json', deck); emit('deck', deck); json(res, 200, { ok: true }); }
+      catch (e) { json(res, 400, { ok: false, err: e.message }); }
+    } else json(res, 200, deck);
+    return;
+  }
+  if (p === '/api/media/art') { media.sendArt(res); return; }
   if (p === '/api/map') {
     if (!cache.map) { res.writeHead(404); res.end('{}'); return; }
     res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' });
@@ -222,8 +299,7 @@ const server = http.createServer(async (req, res) => {
     return;
   }
   if (p === '/api/state') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: status(), ...cache, map: undefined }));
+    json(res, 200, { status: status(), ...cache, map: undefined, trips: activeTrips().snapshot(), media: { ...media.state, artFile: undefined }, adasPrefs: prefs.adas });
     return;
   }
 
@@ -245,5 +321,6 @@ server.listen(CFG.httpPort, '0.0.0.0', () => {
   for (const list of Object.values(os.networkInterfaces())) {
     for (const ni of list || []) if (ni.family === 'IPv4' && !ni.internal) console.log(`    http://${ni.address}:${CFG.httpPort}`);
   }
-  console.log(`\n  Game host: ${CFG.gameHost || 'auto (same PC / learned from the mod)'}   demo: ${CFG.demo}\n`);
+  console.log(`\n  Game host: ${CFG.gameHost || 'auto (same PC / learned from the mod)'}   demo: ${CFG.demo}`);
+  console.log(`  Deck (button pad):  /deck      Macros & shortcuts:  /macros\n`);
 });

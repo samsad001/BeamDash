@@ -93,6 +93,85 @@
     fcwEl.firstChild.textContent = d.fcw === 2 ? 'BRAKE!' : 'CAUTION';
   }
 
+  // ---------------------------------------------------------------- design + multi-function display
+  // live = the real cluster (pop-ups allowed); thumbnails always show the screen pages statically
+  function drawDesign(c, def, d, t, live) {
+    const o = optsFor(def);
+    try { def.draw(c, d, { t, o, S }); } catch (err) { console.error(def.id, err); }
+    G.noGlow(c);
+    const slot = def.mfd ? def.mfd(o, d) : null;
+    try {
+      if (slot && !slot.line) MFD.draw(c, d, slot.x, slot.y, slot.w, slot.h, { ...(def.mfdTheme || {}), ...(slot.theme || {}) });
+      else if (!slot && live) MFD.popup(c, d, def.mfdTheme);
+    } catch (err) { console.error('mfd', err); }
+    if (def.glass) {
+      // faint sheet-of-glass reflection across the whole cluster
+      const g = c.createLinearGradient(0, 0, VW, VH);
+      g.addColorStop(0, 'rgba(255,255,255,.035)'); g.addColorStop(0.35, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(255,255,255,.015)');
+      c.fillStyle = g; c.fillRect(0, 0, VW, VH);
+    }
+    G.noGlow(c);
+  }
+
+  function setDesign(def) {
+    design = def;
+    S.design = def.id;
+    BD.save();
+    sweepT = 0.001;
+    BD.toast(def.name);
+  }
+  function stepDesign(dir) {
+    const i = DESIGNS.indexOf(design);
+    setDesign(DESIGNS[(i + dir + DESIGNS.length) % DESIGNS.length]);
+  }
+
+  // steering-wheel style controls: on-screen buttons, swipes, keys and remote macros all land here
+  function ui(action) {
+    if (action === 'next') MFD.next(1);
+    else if (action === 'prev') MFD.next(-1);
+    else if (action === 'ok') MFD.ok();
+    else if (action === 'hold') MFD.hold();
+    else if (action === 'back') MFD.back();
+    else if (action === 'design-next') stepDesign(1);
+    else if (action === 'design-prev') stepDesign(-1);
+    else if (action === 'hide') document.body.classList.toggle('chrome-hidden');
+    if (['next', 'prev', 'ok', 'hold', 'back'].includes(action)) beep(1800, 0.02, 0.05, 'sine');
+  }
+  BD.on('ui', (m) => ui(m.action));
+  // local buttons act instantly here and tell other clusters through the server
+  const press = (action) => { ui(action); };
+  const wheel = document.getElementById('wheel');
+  if (wheel) {
+    wheel.querySelectorAll('[data-ui]').forEach((b) => {
+      let holdTimer = 0, held = false;
+      b.addEventListener('pointerdown', (e) => {
+        e.stopPropagation();
+        held = false;
+        if (b.dataset.ui === 'ok') holdTimer = setTimeout(() => { held = true; press('hold'); }, 700);
+      });
+      b.addEventListener('pointerup', (e) => {
+        e.stopPropagation();
+        clearTimeout(holdTimer);
+        if (!held) press(b.dataset.ui);
+      });
+      b.addEventListener('pointerleave', () => clearTimeout(holdTimer));
+      b.addEventListener('click', (e) => e.stopPropagation());
+    });
+  }
+  // swipe left / right on the cluster flips pages, swipe up / down changes design
+  let swipe = null, swiped = false;
+  canvas.addEventListener('pointerdown', (e) => { swipe = { x: e.clientX, y: e.clientY, t: performance.now() }; swiped = false; });
+  canvas.addEventListener('pointerup', (e) => {
+    if (!swipe) return;
+    const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+    if (performance.now() - swipe.t < 700 && Math.max(Math.abs(dx), Math.abs(dy)) > 60) {
+      swiped = true;
+      if (Math.abs(dx) > Math.abs(dy)) press(dx < 0 ? 'next' : 'prev');
+      else press(dy < 0 ? 'design-next' : 'design-prev');
+    }
+    swipe = null;
+  });
+
   // ---------------------------------------------------------------- render loop
   let last = performance.now(), acc = 0, t0 = performance.now();
   function frame(now) {
@@ -109,12 +188,7 @@
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.setTransform(scale, 0, 0, scale, ox, oy);
     ctx.globalAlpha = 1;
-    try {
-      design.draw(ctx, d, { t: (now - t0) / 1000, o: optsFor(design), S });
-    } catch (err) {
-      console.error(err);
-    }
-    ctx.shadowBlur = 0;
+    drawDesign(ctx, design, d, (now - t0) / 1000, true);
     if (S.brightness < 1) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = `rgba(0,0,0,${1 - S.brightness})`;
@@ -169,10 +243,7 @@
     }).join('');
     const thumbs = [...el.querySelectorAll('.thumb')];
     thumbs.forEach((b) => (b.onclick = () => {
-      design = DESIGNS.find((x) => x.id === b.dataset.id);
-      S.design = design.id;
-      BD.save();
-      sweepT = 0.001;
+      setDesign(DESIGNS.find((x) => x.id === b.dataset.id));
       thumbs.forEach((t) => t.classList.toggle('on', t === b));
     }));
     const paint = () => {
@@ -182,8 +253,7 @@
         const cv = b.querySelector('canvas');
         const c = cv.getContext('2d');
         c.setTransform(cv.width / VW, 0, 0, cv.height / VH, 0, 0);
-        try { def.draw(c, d, { t: performance.now() / 1000, o: optsFor(def), S }); } catch (err) { console.error(def.id, err); }
-        c.shadowBlur = 0;
+        drawDesign(c, def, d, performance.now() / 1000, false);
       });
     };
     paint();
@@ -217,7 +287,11 @@
     bindSel('speedUnit', 'speedUnit'); bindSel('tempUnit', 'tempUnit'); bindSel('pressUnit', 'pressUnit');
     bindSel('redline', 'redline', true); bindSel('shiftRpm', 'shiftRpm', true); bindSel('fps', 'fps', true);
     bindSel('brightness', 'brightness', true); bindSel('sounds', 'sounds'); bindSel('assistChips', 'assistChips');
+    bindSel('wheelButtons', 'wheelButtons'); bindSel('cruiseStep', 'cruiseStep', true);
   }
+  const applyWheel = () => { if (wheel) wheel.style.display = S.wheelButtons === false ? 'none' : ''; };
+  BD.on('settings', applyWheel);
+  applyWheel();
 
   // ---------------------------------------------------------------- chrome / fullscreen / wake lock
   const body = document.body;
@@ -230,6 +304,7 @@
   };
   showChrome();
   canvas.addEventListener('click', () => {
+    if (swiped) { swiped = false; return; }
     if (body.classList.contains('chrome-hidden')) showChrome();
     else if (!openSheet) { body.classList.add('chrome-hidden'); }
   });
@@ -249,16 +324,10 @@
   document.addEventListener('visibilitychange', () => document.visibilityState === 'visible' && keepAwake());
   window.addEventListener('pointerdown', keepAwake, { once: true });
 
-  // keyboard shortcuts on desktop: ←/→ cycle designs, A assist, H hide
+  // page / design keys come from the shared key bindings (Macros page); these two stay local
   window.addEventListener('keydown', (e) => {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-      const i = DESIGNS.indexOf(design);
-      design = DESIGNS[(i + (e.key === 'ArrowRight' ? 1 : DESIGNS.length - 1)) % DESIGNS.length];
-      S.design = design.id; BD.save(); BD.toast(design.name);
-    }
-    if (e.key === 'a') open('assist');
-    if (e.key === 'h') body.classList.toggle('chrome-hidden');
+    if (e.key === 'a' && !BD.keys.a) open('assist');
     if (e.key === 'Escape') close();
   });
 })();

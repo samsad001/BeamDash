@@ -28,7 +28,21 @@ window.G = (() => {
     c.shadowColor = color;
     c.shadowBlur = blur;
   }
-  function noGlow(c) { c.shadowBlur = 0; c.shadowColor = 'transparent'; }
+  function noGlow(c) { c.shadowBlur = 0; c.shadowColor = 'transparent'; c.shadowOffsetX = 0; c.shadowOffsetY = 0; }
+
+  // subtle curved-glass reflection over a round dial
+  function glass(c, x, y, r) {
+    c.save();
+    c.beginPath(); c.arc(x, y, r, 0, TAU); c.clip();
+    const g = c.createLinearGradient(x - r, y - r, x + r * 0.2, y + r * 0.4);
+    g.addColorStop(0, 'rgba(255,255,255,.10)'); g.addColorStop(0.45, 'rgba(255,255,255,.025)'); g.addColorStop(0.46, 'rgba(255,255,255,0)');
+    c.fillStyle = g;
+    c.beginPath(); c.ellipse(x - r * 0.15, y - r * 0.35, r * 1.05, r * 0.75, -0.5, 0, TAU); c.fill();
+    const v = c.createRadialGradient(x, y, r * 0.75, x, y, r);
+    v.addColorStop(0, 'rgba(0,0,0,0)'); v.addColorStop(1, 'rgba(0,0,0,.35)');
+    c.fillStyle = v; c.fillRect(x - r, y - r, r * 2, r * 2);
+    c.restore();
+  }
 
   // Face + ticks + labels. Returns the value->angle mapping for needles.
   function dial(c, o) {
@@ -118,6 +132,11 @@ window.G = (() => {
     c.translate(x, y);
     c.rotate(a);
     if (o.glow) glow(c, o.glow, o.glowBlur || 14);
+    else if (o.shadow !== false) {
+      // needles sit above the face: soft shadow down-right (shadow offsets ignore the rotation)
+      c.shadowColor = 'rgba(0,0,0,.6)'; c.shadowBlur = 6;
+      c.shadowOffsetX = 3; c.shadowOffsetY = 4;
+    }
     c.fillStyle = col;
     c.beginPath();
     const style = o.style || 'classic';
@@ -144,9 +163,14 @@ window.G = (() => {
     c.fill();
     noGlow(c);
     if (o.cap) {
+      c.rotate(-a); // keep the cap's light coming from the top-left
       c.beginPath();
       c.arc(0, 0, o.cap, 0, TAU);
-      c.fillStyle = o.capColor || '#111';
+      const cg = c.createRadialGradient(-o.cap * 0.35, -o.cap * 0.4, o.cap * 0.1, 0, 0, o.cap);
+      cg.addColorStop(0, o.capRim ? 'rgba(255,255,255,.35)' : 'rgba(255,255,255,.12)');
+      cg.addColorStop(0.35, o.capColor || '#111');
+      cg.addColorStop(1, '#000');
+      c.fillStyle = cg;
       c.fill();
       if (o.capRim) { c.lineWidth = 2; c.strokeStyle = o.capRim; c.stroke(); }
     }
@@ -458,5 +482,5 @@ window.G = (() => {
     c.restore();
   }
 
-  return { PI, TAU, clamp, lerp, text, rrect, glow, noGlow, dial, needle, arcBar, bar, segments, seg7, icon, LIGHT, tellTales, lightRow, gMeter, tireTemp, carTop, limitSign, adasView };
+  return { PI, TAU, clamp, lerp, text, rrect, glow, noGlow, glass, dial, needle, arcBar, bar, segments, seg7, icon, LIGHT, tellTales, lightRow, gMeter, tireTemp, carTop, limitSign, adasView };
 })();

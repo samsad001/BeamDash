@@ -102,6 +102,8 @@ window.Assist = (() => {
       const as = $('#asAccState');
       as.textContent = acc ? `ACTIVE ${display(d.accTarget || set)}` : 'OFF';
       as.className = 'pill ' + (acc ? 'on' : '');
+      // reflect changes made from macros, the Deck or other phones
+      root.querySelectorAll('[data-adas]').forEach((inp) => { if (document.activeElement !== inp) inp.checked = !!S.adas[inp.dataset.adas]; });
       gapEl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.g === (S.adas.accGap || 2)));
       sensEl.querySelectorAll('button').forEach((b) => b.classList.toggle('on', +b.dataset.s === (S.adas.fcwSens || 2)));
       const L = d.lead;

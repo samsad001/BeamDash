@@ -201,6 +201,31 @@
     const others = (d.vehicles || []).filter((v) => !v.me).map((v) => ({ ...v, dist: me ? Math.hypot(v.x - me.x, v.y - me.y) : 0 })).sort((a, b) => a.dist - b.dist);
     $('traffic').innerHTML = '<tr><th>Vehicle</th><th>Distance</th><th style="text-align:right">Speed</th></tr>' + (others.map((v) => `<tr><td>#${v.id}</td><td>${U.shortDist(v.dist)}</td><td>${Math.round(U.speed(v.spd))} ${U.speedLabel()}</td></tr>`).join('') || '<tr><td colspan="3" class="muted">No other vehicles</td></tr>');
   }
+  // trip computer: Trip A / Trip B / Since start / fuel economy, with resets
+  const TRIP_COLS = [['a', 'Trip A', 'trip-a-reset'], ['b', 'Trip B', 'trip-b-reset'], ['start', 'Since start', 'start-reset'], ['econ', 'Fuel economy', 'economy-reset']];
+  function renderTrips() {
+    const t = BD.st.trips;
+    const el = $('trips');
+    if (!t) { el.innerHTML = '<tr><td class="muted">Waiting for data…</td></tr>'; return; }
+    const row = (label, fn) => `<tr><td>${label}</td>${TRIP_COLS.map(([k]) => `<td>${fn(t[k] || {})}</td>`).join('')}</tr>`;
+    const html = `<tr><th></th>${TRIP_COLS.map(([, n]) => `<th style="text-align:right">${n}</th>`).join('')}</tr>` +
+      row('Distance', (x) => `${U.dist(x.dist || 0).toFixed(1)} ${U.distLabel()}`) +
+      row('Drive time', (x) => BD.duration(x.moving)) +
+      row('Engine time', (x) => BD.duration(x.running)) +
+      row('Avg speed', (x) => `${Math.round(U.speed(x.avgSpeed || 0))} ${U.speedLabel()}`) +
+      row('Max speed', (x) => `${Math.round(U.speed(x.maxSpeed || 0))} ${U.speedLabel()}`) +
+      row('Avg consumption', (x) => (x.avgCons ? `${U.consumption(x.avgCons).toFixed(1)} ${U.consLabel()}` : '—')) +
+      row('Fuel used', (x) => `${(x.fuel || 0).toFixed(2)} L`) +
+      row('Since', (x) => (x.since ? new Date(x.since).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—')) +
+      `<tr><td></td>${TRIP_COLS.map(([, , act]) => `<td><button class="btn small" data-reset="${act}">Reset</button></td>`).join('')}</tr>`;
+    if (el._h !== html) {
+      el._h = html;
+      el.innerHTML = html;
+      el.querySelectorAll('[data-reset]').forEach((b) => (b.onclick = () => BD.action(b.dataset.reset)));
+    }
+  }
+  setInterval(renderTrips, 1000);
+
   setInterval(update, 100);
   setInterval(() => { renderTires(BD.data()); }, 200);
   setInterval(renderPt, 1000);

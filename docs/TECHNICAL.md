@@ -1,6 +1,8 @@
-# BeamDash technical write-up (alpha 0.01)
+# BeamDash technical write-up (alpha 0.02)
 
-This document explains how the first BeamDash build is put together: the moving parts, the wire protocols, the algorithms behind the assists, and how to extend it. For installation and everyday use, see `MOD_DOCUMENTATION.md` and the README. What changed in later builds is in `CHANGELOG.md`.
+> What changed in each release: [`CHANGELOG.md`](../CHANGELOG.md).
+
+This document explains how BeamDash is built: the moving parts, the wire protocols, the algorithms behind the assists and the trip computer, and how to extend it. For installation and everyday use, see `MOD_DOCUMENTATION.md` and the README.
 
 ---
 
@@ -8,7 +10,7 @@ This document explains how the first BeamDash build is put together: the moving 
 
 - **Every car, no per-car work.** Data comes from standard BeamNG systems (electrics, powertrain, wheels, navigation graph), never from vehicle-specific code.
 - **Runs on what you already have.** The server is plain Node.js (18+) with **zero npm dependencies**. Copy the folder and run it. The web app is static HTML/JS/Canvas with no build step.
-- **Many screens.** Phones, tablets and a second monitor all connect to the same server and see the same live car.
+- **Many screens, one truth.** Phones, tablets, a second monitor and a button deck all show the same state. Anything that must agree (trip counters, ADAS settings, Deck layout) lives on the server.
 - **Low game overhead.** The mod only reads values the game already computes, and only the player's car streams.
 - **Usable without the game.** A built-in demo car exercises every screen, which is also how the UI is developed and tested.
 
@@ -21,7 +23,7 @@ This document explains how the first BeamDash build is put together: the moving 
 │  Vehicle Lua VM (player car)    Game-engine Lua VM    │
 │  beamDashVeh.lua                beamDash.lua          │
 │   · electrics, wheels,           · all vehicles, GPS  │
-│     powertrain                   · road network       │
+│     powertrain, cruise           · road network       │
 │   · runs car commands            · car info, tuning   │
 │                                  · ADAS logic         │
 │        │ UDP 4445                   │ UDP 4445 ▲ 4446 │
@@ -29,11 +31,14 @@ This document explains how the first BeamDash build is put together: the moving 
          ▼                            ▼          │
 ┌──────────────────── BeamDash server (Node) ──────────┐
 │ server.js   UDP in/out, chunk reassembly, cache, HTTP │
-│ demo.js     demo car                                  │
+│ trips.js    trip computer          actions.js  macros │
+│ media.js    playerctl (MPRIS)      demo.js  demo car  │
+│ data/       settings.json  trips.json  deck.json      │
 └──────────┬──────────────────────────────▲─────────────┘
-           │ Server-Sent Events           │ HTTP POST
-           ▼ (/api/stream)                │ (/api/cmd)
-        Cluster · Telemetry · Map & Nav · Garage   (browsers)
+           │ Server-Sent Events           │ HTTP POST / GET
+           ▼ (/api/stream)                │ (/api/cmd, /api/action/…)
+   Cluster · Telemetry · Map · Garage · Deck · Macros   (browsers)
+   Stream Deck · KDE shortcuts · curl · Companion       (macros)
 ```
 
 **Why UDP from the game:** BeamNG ships LuaSocket. Non-blocking UDP needs no connection management inside the game loop, never stalls a frame, and a lost packet just means the next one 33 ms later wins.
@@ -81,11 +86,13 @@ The server re-sends `hello {needInfo, needMap}` every 3 s, which:
 1. lets a server on another machine be discovered: GE switches its `serverHost` to the sender's IP and tells the vehicle VM;
 2. re-requests car info / map if the server restarted.
 
+When the game reappears after more than 10 s of silence, the server pushes the saved ADAS settings back to it.
+
 ---
 
 ## 4. Server
 
-`server/server.js` is one HTTP server plus two UDP sockets (plus an optional OutGauge socket on 4444).
+`server/server.js` is one HTTP server plus two UDP sockets.
 
 ### Cache and fan-out
 The latest `info`, `vars`, `spec`, `world`, `pt` and merged `electrics` are cached. A new browser receives the cache immediately on connect, then live events. The road network is cached as the raw JSON string and served from `GET /api/map`; clients are only told its version (`mapver`) over SSE, so the stream stays small.
@@ -96,14 +103,41 @@ Live `veh` packets are forwarded to browsers **as the raw string they arrived as
 
 | Endpoint | Method | Purpose |
 |---|---|---|
-| `/api/stream` | GET | SSE stream. Events: `status`, `veh`, `electrics`, `pt`, `spec`, `info`, `vars`, `world`, `mapver`, `cmdResult` |
+| `/api/stream` | GET | SSE stream. Events: `status`, `veh`, `electrics`, `pt`, `spec`, `info`, `vars`, `world`, `mapver`, `media`, `trips`, `ui`, `deck`, `cmdResult` |
 | `/api/cmd` | POST | raw command JSON → game (or demo) |
+| `/api/action/<id>` | GET / POST | named action (macros). Query: `step`, `unit`, `state=up` |
+| `/api/actions` | GET | list of all actions (id, label, group, hold) |
+| `/api/deck` | GET / PUT | Deck layout |
 | `/api/map` | GET | road network JSON |
+| `/api/media/art` | GET | album art of the current track (only that one file) |
 | `/api/state` | GET | snapshot of everything (debugging) |
 | anything else | GET | static files from `public/` (path-traversal checked) |
 
-### OutGauge fallback
-If no mod data arrives, standard OutGauge packets on UDP 4444 are decoded (speed, rpm, gear, pedals, temperatures, fuel, boost, dash-light bits) and turned into the same `veh` shape, so the cluster works in basic mode.
+### Actions (`actions.js`)
+One table defines ~50 actions. Each resolves to one of: a game command, a UI event (broadcast to every cluster as `ui`), a media command, or a trip reset. Stateful actions are resolved on the server from the cached state: `cruise-toggle` picks on/off, `parking-brake` flips the current value, `acc-gap` cycles 1→4, ADAS toggles invert the game's current setting. So one URL works as a toggle from a Stream Deck with no client state. `cruise-plus/minus` convert `step` + `unit` (km/h or mph) to m/s on the server.
+
+Hold actions (horn) take `?state=up` for release.
+
+### Trip computer (`trips.js`)
+Fed by every `veh` packet (30 Hz). Four independent accumulators: `a`, `b`, `start`, `econ`.
+
+```
+dt        = wall-clock time since last packet (ignored if > 2 s: pause / reconnect)
+dist     += speed · dt
+moving   += dt  when speed > 0.5 m/s        (drive time)
+running  += dt  when engine running         (engine time)
+fuel     += Δ  where Δ = fuelVolume(prev) − fuelVolume(now), only if 0 < Δ < 0.05 L
+              (refuels and car swaps make fuel jump up or drop a lot; those are ignored)
+maxSpeed  = max(maxSpeed, speed)
+
+avgSpeed  = dist / moving                    (like a real trip computer: excludes standstill)
+avgCons   = fuel / dist · 100 000  L/100km   (shown once dist > 100 m)
+```
+
+`start` resets automatically when a different vehicle spawns. Real counters are saved to `data/trips.json` every 10 s if changed. The demo car uses a separate, throw-away set.
+
+### Media (`media.js`)
+Polls `playerctl metadata --format …` once a second (status, player, artist, title, album, artUrl, length, position), separated by the unit-separator character so titles with tabs or pipes can't break parsing. `playerctl` reads MPRIS over the user's D-Bus session, so the server must run as the desktop user (hence the systemd **user** unit). If `playerctl` is missing, the feature turns off and re-checks every minute. Album art: `https://` URLs (e.g. Spotify) go straight to the browser; `file://` URLs are served by `/api/media/art`, which only serves the art file of the track playing right now.
 
 ### Demo car (`demo.js`)
 A closed circuit built from a Catmull-Rom spline (≈3.6 km) with a grid of side streets, used as the demo map. A virtual driver:
@@ -122,29 +156,41 @@ No framework, no bundler: one `<script>` per module, sharing a few globals.
 
 | Module | Role |
 |---|---|
-| `client.js` (`BD`) | SSE connection, state store, **normalization**, units, settings (localStorage), commands, formatting |
-| `gauges.js` (`G`) | canvas primitives: dial (ticks, labels, red zone), needles, arc bars, segment bars, 7-segment digits, tell-tale icons drawn as paths, G-meter, top-down car, speed-limit signs, ADAS lane view |
+| `client.js` (`BD`) | SSE connection, state store, **normalization**, units, settings (localStorage), commands / actions, key bindings, formatting |
+| `gauges.js` (`G`) | canvas primitives: dial (ticks, labels, red zone), needles (shadow, cap), arc bars, segment bars, 7-segment digits, ~25 tell-tale icons drawn as paths, G-meter, top-down car, speed-limit signs, ADAS lane view, glass reflection |
 | `mapview.js` | road-network renderer + spatial grid |
-| `designs.js` | the 16 cluster designs (a registry of `{id, draw, opts}`) |
-| `cluster.js` | render loop, smoothing, needle sweep, design picker, customization, warnings, sounds, keys (← → designs, `A` assist, `H` hide) |
-| `assist.js` | the Drive Assist panel (cruise, ACC, FCW, AEB, BSM, speed limits, ESC, drive modes) |
-| `telemetry.js`, `map.js`, `garage.js` | the other pages |
+| `mfd.js` | the multi-function display: pages, OK / hold logic, line mode, pop-ups |
+| `designs.js` | the cluster designs (a registry of `{id, draw, opts, mfd}`) |
+| `cluster.js` | render loop, smoothing, needle sweep, design picker, customization, swipes and steering-wheel buttons, warnings, sounds |
+| `telemetry.js`, `map.js`, `garage.js`, `deck.js`, `macros.js`, `assist.js` | the other pages |
 
 ### Normalization
-`BD.data()` turns raw electrics into one stable object that all designs use: speed (m/s), rpm, tach max (redline × 1.06 rounded up to 1000), red-zone start, gear string (`P/R/N/D3/1…` from the string or number forms the game uses), fuel, range, temperatures, boost, every light as a boolean, cruise / ADAS / route / lead car, and G-forces. Designs never read raw electrics, so one fix applies to all 16.
+`BD.data()` turns raw electrics into one stable object that all designs use: speed (m/s), rpm, tach max (redline × 1.06 rounded up to 1000), red-zone start, gear string (`P/R/N/D3/1…` from the string or number forms the game uses), fuel, range (from measured consumption), temperatures, boost, every light as a boolean, cruise / ADAS / route / lead car, and G-forces. Designs never read raw electrics, so one fix applies to all 20.
 
 ### Rendering
-- Each design draws into a fixed **1600 × 600 virtual canvas**. The page scales it to the screen (letterboxed, HiDPI-aware), so every design works on a phone, an iPad or a 4K monitor without layout code.
-- `requestAnimationFrame` at 60 fps (or 30). Data arrives at 30 Hz, so values are smoothed per frame with `v += (target − v)·(1 − e^(−dt·rate))`, with a rate per signal (rpm fast, temperatures slow).
-- A start-up needle sweep (rpm and speed to max and back, 1.6 s) runs when a car spawns or the design changes.
+- Each design draws into a fixed **1600 × 600 virtual canvas**. The page scales it to the screen (letterboxed, HiDPI-aware, up to 2.5× device pixel ratio), so every design works on a phone, an iPad or a 4K monitor without layout code.
+- `requestAnimationFrame` at 60 fps (or 30 in battery-saver mode). Data arrives at 30 Hz, so values are smoothed per frame with `v += (target − v)·(1 − e^(−dt·rate))`, with a rate per signal (rpm fast, temperatures slow). That gives needle inertia without lag.
+- A start-up needle sweep (rpm and speed to max and back, smoothstep, 1.6 s) runs when a car spawns or the design changes, as on many real cars.
+- Static-looking parts (faces, ticks) are redrawn every frame. It keeps designs simple and fully dynamic (colours, units and redline can change live). Caching faces to an offscreen canvas is the obvious optimization if a slow device ever needs it.
+
+### Multi-function display
+`MFD` holds the current page (persisted per device) and draws it into any rectangle with a theme (`bg, fg, dim, accent, font, line`), so the same 10 pages fit a tall TFT, a small centre screen, or a pop-up. Each design declares where its screen is:
+
+```js
+mfd: (opts, data) => ({ x, y, w, h, theme }) // draw the pages here
+mfd: () => ({ line: true })                   // single-line LCD mode (the design calls MFD.line())
+// no mfd → pages appear as a 5 s pop-up when you flip, like a classic trip computer
+```
+
+Page layout uses a unit `u = min(w/11, h/6.4)`, so text scales with the slot. Input sources (on-screen buttons, swipes, keys, Deck, macro URLs) all end in the same `ui(action)` function. OK is short-press; hold (700 ms) is reset.
 
 ### Map renderer
-Road edges are bucketed into a **250 m spatial grid** when the map loads. Each frame only the cells around the view are visited, edges are grouped by class (dirt / minor / major) and by width, and each group is one canvas path. Projection: translate → rotate (heading-up) → scale with Y flipped (BeamNG is Z-up, Y-north).
+Road edges are bucketed into a **250 m spatial grid** when the map loads. Each frame only the cells around the view are visited, edges are grouped by class (dirt / minor / major) and by width, and each group is one canvas path. That's a handful of `stroke()` calls even on large levels. Projection: translate → rotate (heading-up = `heading − π/2`) → scale with Y flipped (BeamNG is Z-up, Y-north). The own car uses the 30 Hz vehicle position for smoothness; other cars come from the 10 Hz world list.
 
-**Turn-by-turn:** walk the route polyline; at each point, compare the heading 25 m before and after; the first point beyond 15 m with |Δheading| > 40° is the next manoeuvre (> 110° = sharp).
+**Turn-by-turn:** walk the route polyline; at each point, compare the heading 25 m before and after; the first point beyond 15 m with |Δheading| > 40° is the next manoeuvre (> 110° = sharp). The sign gives left/right (counter-clockwise = left).
 
 ### 3-D surround view
-Other vehicles are converted to the car's frame (`lon = rel·fwd`, `lat = rel·right`) and projected with a pinhole camera behind and above the car. Cars are drawn back-to-front as a shadow, a rear face and a roof. The lead car takes the ACC / FCW colour; blind-spot cars turn amber.
+Other vehicles are converted to the car's frame (`lon = rel·fwd`, `lat = rel·right`) and projected with a pinhole camera 12 m behind and 6 m above the car. `x = cx + fx·lat/z`, `y = horizon + fy·h_cam/z`, `z = lon + 12`. Cars are drawn back-to-front as a shadow, a rear face and a roof. The lead car takes the ACC / FCW colour; blind-spot cars turn amber.
 
 ---
 
@@ -169,13 +215,13 @@ BSM         : −13 < lon < 2.5 and 1.5 < |lat| < 5.5
 TSR (2 Hz)  : map.findClosestRoad(pos) → link.speedLimit if within 15 m
 ```
 
-ACC is a proportional gap controller on top of the game's own cruise control.
+ACC is a proportional gap controller on top of the game's own cruise control (which does the throttle/brake), so it inherits each car's cruise behaviour.
 
 ---
 
 ## 7. BeamNG APIs used
 
-| API | Purpose | Status in this build |
+| API | Purpose | Status |
 |---|---|---|
 | LuaSocket UDP (`socket.udp`, `sendto`, `receivefrom`, non-blocking) | transport | ✅ confirmed (native Linux) |
 | `electrics.values`, `sensors.gx2/gy2/gz2`, `obj:getPosition/Velocity/DirectionVector` | live data | ✅ confirmed |
@@ -199,28 +245,42 @@ Every call that could be missing on some car or version is wrapped in `pcall`. A
 
 | Where | What |
 |---|---|
-| browser localStorage | per-screen choices: design, design colours, units, brightness, map theme |
+| `data/settings.json` (server) | ADAS settings (shared, restored when the game reconnects) |
+| `data/trips.json` (server) | trip counters |
+| `data/deck.json` (server) | Deck layout (pushed live to every Deck as `deck`) |
+| browser localStorage | per-screen choices: design, design colours, units, brightness, key bindings, current page, map theme |
 | `settings/beamDash.json` (BeamNG user folder) | mod network settings |
 
-The server keeps nothing on disk in this build. ADAS settings live in the game session.
+Per-screen choices stay local on purpose: the iPad can run the E30 cluster while the phone runs the Deck.
 
 ---
 
 ## 9. Security model
 
-- Designed for a **trusted home network**. There is no authentication: anyone who can reach port 8080 can view telemetry and send car commands.
-- The server only reads files under `public/` (normalized path check). Request bodies are capped at 1 MB. Commands are JSON data, never evaluated as code. In the game, payloads reach Lua only through `jsonDecode` and a fixed action table.
-- Don't port-forward 8080 / 4445 / 4446. For remote use, put it behind a VPN.
+- Designed for a **trusted home network**. There is no authentication: anyone who can reach port 8080 can view telemetry and send car / media commands.
+- The server only reads files under `public/` (normalized path check), and the album-art endpoint only serves the single path currently reported by the media player.
+- Request bodies are capped at 1 MB. Commands are JSON data, never evaluated as code on the server. In the game, payloads reach Lua only through `jsonDecode` and a fixed action table. The generic `controller` action can call a named function on a vehicle controller, but not arbitrary Lua.
+- Don't port-forward 8080 / 4445 / 4446. For remote use, put it behind a VPN (e.g. WireGuard / Tailscale).
 
 ---
 
-## 10. Extending
+## 10. Performance notes
+
+- Vehicle VM: one table walk of ~60 keys at 30 Hz, a full electrics walk at 4 Hz, one `jsonEncode` per packet. Negligible next to physics.
+- GE: world list and ADAS at 10 Hz over `map.objects` (O(vehicles)).
+- Network (estimate, not measured): a `veh` packet is ~2–4 kB at 30 Hz, so on the order of 100 kB/s game → server, and about the same to each browser over SSE. Comfortable for home Wi-Fi with several screens.
+- Browser: one canvas per page. Frame cost hasn't been profiled on phones yet; the 30 fps mode in Customize halves the work if a device struggles.
+
+---
+
+## 11. Extending
 
 **Add a cluster design** (`public/js/designs.js`):
 ```js
 reg({
   id: 'myDash', name: "My Dash '99", era: '1990s', region: 'Euro', inspired: 'my idea',
   opts: [{ k: 'accent', label: 'Accent', type: 'color', def: '#ff8800' }],
+  mfd: (o) => ({ x: 600, y: 100, w: 400, h: 400, theme: { accent: o.accent } }), // optional screen
   draw(c, d, k) {
     // 1600x600 canvas; d = normalized data; k.o = options; k.t = seconds
     const ang = G.dial(c, { x: 400, y: 300, r: 250, max: d.tachMax / 1000, major: 1, minor: 0.5 });
@@ -228,23 +288,27 @@ reg({
   },
 });
 ```
-It appears in the picker automatically (grouped by `era`).
+It appears in the picker automatically (grouped by `era`) with a live thumbnail.
 
-**Add a game command:** a handler in `beamDashVeh.lua` (`actions.<name>`) or `beamDash.lua` (`geActions.<name>`), then send `{type:'<name>'}` to `/api/cmd`.
+**Add an action:** one line in `server/actions.js`. It shows up on the Macros page and in the Deck editor. A new game command needs a handler in `beamDashVeh.lua` (`actions.<name>`) or `beamDash.lua` (`geActions.<name>`).
+
+**Add an MFD page:** add `{ id, name }` to `PAGES` and a renderer `R.<id>` (plus a `line()` case) in `mfd.js`.
 
 ---
 
-## 11. Testing
+## 12. Testing
 
-- **Demo mode** covers every page and every design without the game.
+- **Demo mode** covers every page, every design and every action without the game.
 - A **fake-game UDP script** (sends `veh` / `world` packets and a chunked 6 000-node map, then listens on 4446) verified the demo → live hand-off, chunk reassembly and command forwarding.
-- First live test on native Linux: ETK 800 on ks_nord, 179 electrics values, road network received.
+- Lua files are checked for block balance; the game itself is the final check (watch the `~` console for `beamDash` lines).
 
 ---
 
-## 12. Known limitations
+## 13. Known limitations
 
 - Cruise control and adaptive cruise don't work in-game (a fix is planned for the next release).
 - Several command APIs (§7) are still to be confirmed in-game.
-- No trip computer, info pages, Deck or macros yet (added in 0.02).
-- Speed limits depend on the level's navigation data. No authentication (see §9).
+- Tire *surface* temperature only appears if the BeamNG version exposes it; brake temperatures and pressures are always there.
+- Speed limits depend on the level's navigation data.
+- Range and consumption are estimates from fuel-volume changes; they settle after a few hundred metres.
+- No authentication (see §9).

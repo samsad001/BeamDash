@@ -1,20 +1,19 @@
-# systemd unit: runs the BeamDash server at boot.
-# 1. Edit User= and the two /opt/BeamDash paths below to match where you copied the folder.
-# 2. sudo cp beamdash.service /etc/systemd/system/
-# 3. sudo systemctl daemon-reload && sudo systemctl enable --now beamdash
-# Logs: journalctl -u beamdash -f
+# systemd USER unit: starts the BeamDash server when you log in.
+# It runs as your user (not root) so "Now playing" can see your desktop's media players.
+# 1. Change the two /home/YOU/BeamDash paths below to where the folder is.
+# 2. mkdir -p ~/.config/systemd/user && cp beamdash.service ~/.config/systemd/user/
+# 3. systemctl --user daemon-reload && systemctl --user enable --now beamdash
+# Logs: journalctl --user -u beamdash -f      Stop: systemctl --user stop beamdash
 [Unit]
 Description=BeamDash gauge cluster server for BeamNG.drive
-After=network-online.target
-Wants=network-online.target
+After=graphical-session.target
 
 [Service]
-User=YOUR_USER
-WorkingDirectory=/opt/BeamDash
+WorkingDirectory=/home/YOU/BeamDash
 # add e.g. --game-host 192.168.1.60 if BeamNG runs on a different machine
-ExecStart=/usr/bin/env node /opt/BeamDash/server/server.js --port 8080
+ExecStart=/usr/bin/env node /home/YOU/BeamDash/server/server.js --port 8080
 Restart=on-failure
 RestartSec=3
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target

@@ -254,7 +254,7 @@ window.DESIGNS = (() => {
 
   // =============================================================== 1970s
   reg({
-    id: 'us70', name: "Detroit '70", era: '1970s', region: 'US', inspired: 'American muscle (GM / Ford)',
+    id: 'us70', glass: true, mfdTheme: { bg: 'rgba(12,12,12,.95)', accent: '#ff7a1a', font: 'Barlow Condensed' }, name: "Detroit '70", era: '1970s', region: 'US', inspired: 'American muscle (GM / Ford)',
     opts: [
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff7a1a' },
       { k: 'panel', label: 'Dash panel', type: 'select', options: ['brushed', 'wood', 'black'], def: 'brushed' },
@@ -316,7 +316,7 @@ window.DESIGNS = (() => {
   });
 
   reg({
-    id: 'eu72', name: "Bavaria '72", era: '1970s', region: 'Euro', inspired: 'BMW 2002-era German sedan',
+    id: 'eu72', glass: true, mfdTheme: { bg: 'rgba(6,6,6,.95)', accent: '#ff6a1a', font: 'Barlow Condensed' }, name: "Bavaria '72", era: '1970s', region: 'Euro', inspired: 'BMW 2002-era German sedan',
     opts: [
       { k: 'needle', label: 'Needle', type: 'color', def: '#f2f2f2' },
       { k: 'tip', label: 'Needle tip', type: 'color', def: '#ff6a1a' },
@@ -376,7 +376,7 @@ window.DESIGNS = (() => {
 
   // =============================================================== 1980s
   reg({
-    id: 'bav86', name: "Bavaria '86", era: '1980s', region: 'Euro', inspired: 'BMW E30 3-Series',
+    id: 'bav86', glass: true, mfdTheme: { bg: 'rgba(8,5,2,.95)', accent: '#ff6a1f', fg: '#ffd2b0', dim: 'rgba(255,150,90,.65)', line: 'rgba(255,106,31,.2)', font: 'Barlow Condensed' }, name: "Bavaria '86", era: '1980s', region: 'Euro', inspired: 'BMW E30 3-Series',
     opts: [
       { k: 'illum', label: 'Illumination', type: 'color', def: '#ff6a1f' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff4d0a' },
@@ -445,7 +445,7 @@ window.DESIGNS = (() => {
   });
 
   reg({
-    id: 'us84', name: "Digital '84", era: '1980s', region: 'US', inspired: 'Corvette C4 liquid-crystal dash',
+    id: 'us84', mfdTheme: { bg: 'rgba(3,10,5,.96)', accent: '#4cff6a', fg: '#ffb52e', dim: 'rgba(76,255,106,.6)', line: 'rgba(76,255,106,.15)', font: 'Orbitron' }, name: "Digital '84", era: '1980s', region: 'US', inspired: 'Corvette C4 liquid-crystal dash',
     opts: [
       { k: 'palette', label: 'LCD colours', type: 'select', options: ['classic', 'blue', 'red'], def: 'classic' },
     ],
@@ -498,12 +498,14 @@ window.DESIGNS = (() => {
 
   // =============================================================== 1990s
   reg({
-    id: 'bav95', name: "Bavaria M '98", era: '1990s', region: 'Euro', inspired: 'BMW E36 / E46 M3',
+    id: 'bav95', glass: true, name: "Bavaria M '98", era: '1990s', region: 'Euro', inspired: 'BMW E36 / E46 M3',
     opts: [
       { k: 'illum', label: 'Illumination', type: 'color', def: '#ff7a2a' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff2414' },
       { k: 'warmup', label: 'Warm-up redline', type: 'bool', def: true },
     ],
+    mfd: () => ({ line: true }), // pages show in the check-control LCD
+    mfdTheme: { accent: '#ff7a2a', fg: '#ffd7b0', dim: 'rgba(255,170,110,.6)', font: 'Barlow Condensed', line: 'rgba(255,122,42,.2)' },
     draw(c, d, k) {
       const o = k.o, il = o.illum;
       c.fillStyle = '#030303'; c.fillRect(0, 0, 1600, 600);
@@ -551,16 +553,22 @@ window.DESIGNS = (() => {
       c.fillStyle = '#0a0703'; rrect(c, 580, 470, 440, 70, 8); c.fill();
       c.strokeStyle = '#2a1a08'; c.lineWidth = 2; c.stroke();
       const msgs = checkMessages(d);
-      const msg = msgs.length ? msgs[Math.floor(k.t / 3) % msgs.length] : `${BD.clock(d.tod)}    ${U.speed(d.speed) > 1 ? econ(d).toFixed(1) + ' L/100' : 'READY'}`;
-      // dot-matrix look: draw text then a dot mask
-      text(c, msg, 800, 506, 30, msgs.length ? '#ff9a3a' : il, 'center', 'Orbitron', 500);
+      // warnings first, otherwise the on-board computer page you flipped to (like the real check-control display)
+      const msg = msgs.length ? msgs[Math.floor(k.t / 3) % msgs.length] : MFD.line(d);
+      c.save();
+      c.beginPath(); c.rect(588, 474, 424, 62); c.clip();
+      const size = msg.length > 26 ? 21 : 27;
+      text(c, msg, 800, 506, size, msgs.length ? '#ff9a3a' : il, 'center', 'Orbitron', 500);
+      c.restore();
+      // dot-matrix look: horizontal mask lines over the text
       c.fillStyle = 'rgba(10,7,3,.55)';
       for (let yy = 476; yy < 540; yy += 4) c.fillRect(584, yy, 432, 1.4);
+      text(c, MFD.page.name.toUpperCase(), 800, 556, 13, 'rgba(255,122,42,.5)', 'center', 'Orbitron', 500);
     },
   });
 
   reg({
-    id: 'rally98', name: "Pleiades Rally '98", era: '1990s', region: 'Japan', inspired: 'Subaru Impreza WRX STI (GC8)',
+    id: 'rally98', glass: true, mfdTheme: { bg: 'rgba(10,14,24,.95)', accent: '#2a6bff', font: 'Rajdhani' }, name: "Pleiades Rally '98", era: '1990s', region: 'Japan', inspired: 'Subaru Impreza WRX STI (GC8)',
     opts: [
       { k: 'face', label: 'Gauge face', type: 'select', options: ['white', 'silver', 'black'], def: 'white' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#e3121b' },
@@ -622,7 +630,7 @@ window.DESIGNS = (() => {
 
   // =============================================================== 2000s
   reg({
-    id: 'optitron04', name: "Optitron '04", era: '2000s', region: 'Japan', inspired: 'Electroluminescent clusters (Lexus / STI 2004)',
+    id: 'optitron04', mfdTheme: { bg: 'rgba(0,0,0,.95)', accent: '#ff2a2a', font: 'Rajdhani' }, name: "Optitron '04", era: '2000s', region: 'Japan', inspired: 'Electroluminescent clusters (Lexus / STI 2004)',
     opts: [
       { k: 'accent', label: 'Glow colour', type: 'color', def: '#ff2a2a' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff3a1a' },
@@ -673,7 +681,7 @@ window.DESIGNS = (() => {
   });
 
   reg({
-    id: 'bav06', name: "Bavaria '06", era: '2000s', region: 'Euro', inspired: 'BMW E90 3-Series',
+    id: 'bav06', glass: true, mfdTheme: { bg: 'rgba(6,4,2,.95)', accent: '#ff6e1f', fg: '#ffd9bf', dim: 'rgba(255,140,80,.65)', line: 'rgba(255,110,31,.2)', font: 'Rajdhani' }, name: "Bavaria '06", era: '2000s', region: 'Euro', inspired: 'BMW E90 3-Series',
     opts: [
       { k: 'illum', label: 'Illumination', type: 'color', def: '#ff6e1f' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff3a0e' },
@@ -734,7 +742,7 @@ window.DESIGNS = (() => {
   });
 
   reg({
-    id: 'pony05', name: "Retro Pony '05", era: '2000s', region: 'US', inspired: 'Ford Mustang S197 (colour-selectable)',
+    id: 'pony05', glass: true, mfdTheme: { bg: 'rgba(8,10,14,.95)', accent: '#3fa9ff', font: 'Bebas Neue' }, name: "Retro Pony '05", era: '2000s', region: 'US', inspired: 'Ford Mustang S197 (colour-selectable)',
     opts: [
       { k: 'accent', label: 'Backlight colour', type: 'color', def: '#3fa9ff' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff3b1f' },
@@ -785,7 +793,9 @@ window.DESIGNS = (() => {
     id: 'vette14', name: "Stingray '14", era: '2010s', region: 'US', inspired: 'Corvette C7 configurable TFT',
     opts: [
       { k: 'mode', label: 'Mode', type: 'select', options: ['tour', 'sport', 'track'], def: 'tour' },
+      { k: 'right', label: 'Right screen', type: 'select', options: ['pages', 'g-meter + tires'], def: 'pages' },
     ],
+    mfd: (o) => (o.right === 'pages' ? { x: 1130, y: 50, w: 420, h: 500, theme: { accent: { tour: '#3fb6ff', sport: '#ffd21f', track: '#ff2a2a' }[o.mode], bg: 'rgba(0,0,0,0)' } } : null),
     draw(c, d, k) {
       const mode = k.o.mode;
       const a = { tour: '#3fb6ff', sport: '#ffd21f', track: '#ff2a2a' }[mode];
@@ -804,15 +814,17 @@ window.DESIGNS = (() => {
       rowBar(340, 'COOLANT', `${Math.round(tempC(d))}${U.tempLabel()}`, waterFrac(d), d.water > 112);
       rowBar(425, 'BOOST', `${U.boost(d.boost).toFixed(1)} ${U.pressLabel()}`, clamp((d.boost + 5) / (d.boostMax + 5), 0, 1), false);
       text(c, `${odoStr(d)} ${U.distLabel()}   TRIP ${tripStr(d)}`, 260, 520, 22, 'rgba(255,255,255,.55)', 'center', 'Rajdhani', 600);
-      // right: g meter + tires
-      G.gMeter(c, 1240, 230, 90, d.gx, -d.gy, { color: a, font: 'Rajdhani' });
-      G.carTop(c, 1440, 230, 200, d.wheels, {
-        wheelColor: (w) => G.tireTemp()(w.brakeSurfaceTemperature || 30),
-        label: (w) => (w.pressure ? U.tire(w.pressure).toFixed(BD.settings.pressUnit === 'psi' ? 0 : 1) : ''),
-        font: 'Rajdhani',
-      });
-      text(c, 'TIRE ' + U.pressLabel() + ' · BRAKE TEMP', 1440, 360, 16, 'rgba(255,255,255,.5)', 'center', 'Rajdhani', 600);
-      if (!navCard(c, d, 1150, 420, 380, 90, { accent: a })) lightRow(c, d, 1340, 465, 32, 6, { list: ['abs', 'esc', 'check', 'oil', 'battery', 'tpms'] });
+      // right: interactive pages, or the fixed g-meter + tires screen
+      if (k.o.right !== 'pages') {
+        G.gMeter(c, 1240, 230, 90, d.gx, -d.gy, { color: a, font: 'Rajdhani' });
+        G.carTop(c, 1440, 230, 200, d.wheels, {
+          wheelColor: (w) => G.tireTemp()(w.brakeSurfaceTemperature || 30),
+          label: (w) => (w.pressure ? U.tire(w.pressure).toFixed(BD.settings.pressUnit === 'psi' ? 0 : 1) : ''),
+          font: 'Rajdhani',
+        });
+        text(c, 'TIRE ' + U.pressLabel() + ' · BRAKE TEMP', 1440, 360, 16, 'rgba(255,255,255,.5)', 'center', 'Rajdhani', 600);
+        if (!navCard(c, d, 1150, 420, 380, 90, { accent: a })) lightRow(c, d, 1340, 465, 32, 6, { list: ['abs', 'esc', 'check', 'oil', 'battery', 'tpms'] });
+      }
       if (mode === 'track') {
         const f = d.rpm / d.tachMax;
         segments(c, 520, 70, 560, 60, 28, f, (ff) => (ff * d.tachMax > d.shiftRpm ? (Math.floor(k.t * 12) % 2 ? '#3a8bff' : '#000') : ff * d.tachMax > d.redFrom * 0.85 ? '#ff2a2a' : ff > 0.5 ? '#ffd21f' : '#2ae05a'), 'rgba(255,255,255,.06)', 0.2);
@@ -842,9 +854,10 @@ window.DESIGNS = (() => {
     id: 'virtual16', name: "Euro Virtual '16", era: '2010s', region: 'Euro', inspired: 'Audi Virtual Cockpit', adasNative: true,
     opts: [
       { k: 'view', label: 'View', type: 'select', options: ['classic', 'wide'], def: 'classic' },
-      { k: 'center', label: 'Centre screen', type: 'select', options: ['map', 'assist', 'car', 'tires'], def: 'map' },
+      { k: 'center', label: 'Centre screen', type: 'select', options: ['pages', 'map', 'assist', 'car', 'tires'], def: 'pages' },
       { k: 'accent', label: 'Needle colour', type: 'color', def: '#ff3226' },
     ],
+    mfd: (o) => (o.center === 'pages' ? (o.view === 'wide' ? { x: 340, y: 40, w: 920, h: 470 } : { x: 620, y: 90, w: 360, h: 420 }) : null),
     draw(c, d, k) {
       const a = accent(k, '#ff3226'), wide = k.o.view === 'wide';
       const bg = c.createRadialGradient(800, 300, 100, 800, 300, 900); bg.addColorStop(0, '#15171c'); bg.addColorStop(1, '#030304');
@@ -872,7 +885,9 @@ window.DESIGNS = (() => {
       const cx0 = wide ? 340 : 620, cw = wide ? 920 : 360, cy0 = wide ? 40 : 90, ch = wide ? 470 : 420;
       c.fillStyle = 'rgba(0,0,0,.6)'; rrect(c, cx0, cy0, cw, ch, 18); c.fill();
       const view = k.o.center;
-      if (view === 'map') {
+      if (view === 'pages') {
+        // drawn by the multi-function display
+      } else if (view === 'map') {
         MapView.mini(c, d, cx0, cy0, cw, ch, { zoom: wide ? 1.4 : 1.1, theme: 'night', clipRound: 18 });
         navCard(c, d, cx0 + 14, cy0 + 14, Math.min(320, cw - 28), 76, { accent: '#5aa8ff' });
       } else if (view === 'assist') {
@@ -904,8 +919,14 @@ window.DESIGNS = (() => {
     id: 'bavLive22', name: "Bavaria Live '22", era: '2020s', region: 'Euro', inspired: 'BMW Live Cockpit Professional (G20)', adasNative: true,
     opts: [
       { k: 'theme', label: 'Mode', type: 'select', options: ['auto', 'comfort', 'sport', 'eco'], def: 'auto' },
-      { k: 'center', label: 'Centre', type: 'select', options: ['auto', 'map', 'assist'], def: 'auto' },
+      { k: 'center', label: 'Centre', type: 'select', options: ['pages', 'auto', 'map', 'assist'], def: 'pages' },
     ],
+    mfd: (o, d) => {
+      if (o.center !== 'pages') return null;
+      let th = o.theme;
+      if (th === 'auto') th = /sport/i.test(d.driveMode || '') ? 'sport' : /eco/i.test(d.driveMode || '') ? 'eco' : 'comfort';
+      return { x: 600, y: 90, w: 400, h: 410, theme: { accent: { comfort: '#5ab0ff', sport: '#ff3030', eco: '#2fe0c8' }[th], bg: 'rgba(10,14,22,.55)' } };
+    },
     draw(c, d, k) {
       let th = k.o.theme;
       if (th === 'auto') th = /sport/i.test(d.driveMode || '') ? 'sport' : /eco/i.test(d.driveMode || '') ? 'eco' : 'comfort';
@@ -946,7 +967,9 @@ window.DESIGNS = (() => {
       let view = k.o.center;
       if (view === 'auto') view = d.route ? 'map' : 'assist';
       const cx0 = 590, cy0 = 80, cw = 420, ch = 430;
-      if (view === 'map') {
+      if (view === 'pages') {
+        // drawn by the multi-function display
+      } else if (view === 'map') {
         MapView.mini(c, d, cx0, cy0, cw, ch, { zoom: 1.2, theme: 'night', clipRound: 30 });
         const vg = c.createRadialGradient(800, 300, 120, 800, 300, 320); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(2,3,5,.95)');
         c.fillStyle = vg; c.fillRect(cx0, cy0, cw, ch);
@@ -963,7 +986,14 @@ window.DESIGNS = (() => {
       { k: 'theme', label: 'Theme', type: 'select', options: ['dark', 'light'], def: 'dark' },
       { k: 'accent', label: 'Accent', type: 'color', def: '#5aa8ff' },
       { k: 'center', label: 'Centre', type: 'select', options: ['surround', 'map'], def: 'surround' },
+      { k: 'right', label: 'Right screen', type: 'select', options: ['pages', 'map + vitals'], def: 'pages' },
     ],
+    mfd: (o) => (o.right === 'pages' ? {
+      x: 1150, y: 46, w: 420, h: 516,
+      theme: o.theme === 'light'
+        ? { bg: 'rgba(255,255,255,.7)', fg: '#0d1320', dim: 'rgba(13,19,32,.55)', line: 'rgba(0,0,0,.12)', accent: o.accent || '#5aa8ff', mapTheme: 'light' }
+        : { bg: 'rgba(255,255,255,.04)', accent: o.accent || '#5aa8ff' },
+    } : null),
     draw(c, d, k) {
       const light = k.o.theme === 'light', a = accent(k, '#5aa8ff');
       const fg = light ? '#0d1320' : '#ffffff', dim = light ? 'rgba(13,19,32,.55)' : 'rgba(255,255,255,.55)';
@@ -1002,33 +1032,39 @@ window.DESIGNS = (() => {
         text(c, d.fcw === 2 ? 'BRAKE!' : 'CAUTION', 800, 470, 60, d.fcw === 2 ? '#ff2a1f' : '#ffb000', 'center', 'Rajdhani', 700);
         noGlow(c);
       }
-      // right: mini map + vitals
-      c.save();
-      if (k.o.center !== 'map') MapView.mini(c, d, 1160, 50, 400, 300, { zoom: 0.9, theme: light ? 'light' : 'night', clipRound: 24 });
-      else {
-        c.fillStyle = light ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.04)'; rrect(c, 1160, 50, 400, 300, 24); c.fill();
-        G.carTop(c, 1360, 200, 230, d.wheels, { body: light ? 'rgba(0,0,0,.08)' : undefined, line: light ? 'rgba(0,0,0,.3)' : undefined, wheelColor: (w) => G.tireTemp()(w.brakeSurfaceTemperature || 30), label: (w) => (w.pressure ? U.tire(w.pressure).toFixed(1) : ''), textColor: fg, font: 'Rajdhani' });
+      // right: interactive pages (drawn by the MFD), or the fixed mini map + vitals
+      if (k.o.right !== 'pages') {
+        c.save();
+        if (k.o.center !== 'map') MapView.mini(c, d, 1160, 50, 400, 300, { zoom: 0.9, theme: light ? 'light' : 'night', clipRound: 24 });
+        else {
+          c.fillStyle = light ? 'rgba(255,255,255,.6)' : 'rgba(255,255,255,.04)'; rrect(c, 1160, 50, 400, 300, 24); c.fill();
+          G.carTop(c, 1360, 200, 230, d.wheels, { body: light ? 'rgba(0,0,0,.08)' : undefined, line: light ? 'rgba(0,0,0,.3)' : undefined, wheelColor: (w) => G.tireTemp()(w.brakeSurfaceTemperature || 30), label: (w) => (w.pressure ? U.tire(w.pressure).toFixed(1) : ''), textColor: fg, font: 'Rajdhani' });
+        }
+        c.restore();
+        const row = (y, l, v) => { text(c, l, 1170, y, 22, dim, 'left', 'Rajdhani', 600); text(c, v, 1550, y, 26, fg, 'right', 'Rajdhani', 700); };
+        row(390, d.electric ? 'Battery' : 'Fuel', `${Math.round(d.fuel * 100)}%`);
+        c.fillStyle = light ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)'; rrect(c, 1170, 405, 380, 8, 4); c.fill();
+        c.fillStyle = d.lights.lowFuel ? '#ffb000' : a; rrect(c, 1170, 405, 380 * clamp(d.fuel, 0, 1), 8, 4); c.fill();
+        row(440, 'Range', rangeStr(d));
+        row(475, 'Consumption', `${U.consumption(d.consumption).toFixed(1)} ${U.consLabel()}`);
+        row(510, 'Coolant · Oil', `${Math.round(tempC(d))}° · ${Math.round(U.temp(d.oilT))}°`);
+        row(545, BD.clock(d.tod), `${odoStr(d)} ${U.distLabel()}`);
+      } else {
+        // fuel + clock strip stays visible under the left speed area
+        text(c, `${BD.clock(d.tod)}   ·   ${Math.round(d.fuel * 100)}% ${rangeStr(d)}`, 250, 575, 20, dim, 'center', 'Rajdhani', 600);
       }
-      c.restore();
-      const row = (y, l, v) => { text(c, l, 1170, y, 22, dim, 'left', 'Rajdhani', 600); text(c, v, 1550, y, 26, fg, 'right', 'Rajdhani', 700); };
-      row(390, d.electric ? 'Battery' : 'Fuel', `${Math.round(d.fuel * 100)}%`);
-      c.fillStyle = light ? 'rgba(0,0,0,.08)' : 'rgba(255,255,255,.08)'; rrect(c, 1170, 405, 380, 8, 4); c.fill();
-      c.fillStyle = d.lights.lowFuel ? '#ffb000' : a; rrect(c, 1170, 405, 380 * clamp(d.fuel, 0, 1), 8, 4); c.fill();
-      row(440, 'Range', rangeStr(d));
-      row(475, 'Consumption', `${U.consumption(d.consumption).toFixed(1)} ${U.consLabel()}`);
-      row(510, 'Coolant · Oil', `${Math.round(tempC(d))}° · ${Math.round(U.temp(d.oilT))}°`);
-      row(545, BD.clock(d.tod), `${odoStr(d)} ${U.distLabel()}`);
       lightRow(c, d, 800, 22, 26, 8, { list: ['sigL', 'high', 'low', 'fog', 'park', 'abs', 'esc', 'check', 'oil', 'battery', 'tpms', 'temp', 'sigR'] });
     },
   });
 
   reg({
-    id: 'wrx22', name: "Pleiades '22", era: '2020s', region: 'Japan', inspired: 'Subaru WRX (VB) with centre display', adasNative: true,
+    id: 'wrx22', name: "Pleiades '22", era: '2020s', region: 'Japan', inspired: 'Subaru WRX (VB) with centre display', adasNative: true, glass: true,
     opts: [
-      { k: 'center', label: 'Centre display', type: 'select', options: ['eyesight', 'boost', 'gforce', 'tires'], def: 'eyesight' },
+      { k: 'center', label: 'Centre display', type: 'select', options: ['pages', 'eyesight', 'boost', 'gforce', 'tires'], def: 'pages' },
       { k: 'accent', label: 'Ring colour', type: 'color', def: '#2a7fff' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff2b1c' },
     ],
+    mfd: (o) => (o.center === 'pages' ? { x: 616, y: 76, w: 368, h: 430, theme: { bg: 'rgba(0,0,0,0)', accent: o.accent || '#2a7fff', fg: '#e8eef8', dim: '#7f8ea8' } } : null),
     draw(c, d, k) {
       const a = accent(k, '#2a7fff'), o = k.o;
       c.fillStyle = '#060708'; c.fillRect(0, 0, 1600, 600);
@@ -1058,7 +1094,9 @@ window.DESIGNS = (() => {
       const cx0 = 610, cy0 = 70, cw = 380, ch = 470;
       c.fillStyle = '#0a0d14'; rrect(c, cx0, cy0, cw, ch, 20); c.fill(); c.strokeStyle = '#1c2433'; c.lineWidth = 2; c.stroke();
       const view = o.center;
-      if (view === 'eyesight') {
+      if (view === 'pages') {
+        // drawn by the multi-function display
+      } else if (view === 'eyesight') {
         text(c, 'EyeSight', cx0 + 24, cy0 + 32, 22, '#9fb4d6', 'left', 'Rajdhani', 700);
         limit(c, d, cx0 + cw - 40, cy0 + 40, 26);
         G.adasView(c, cx0 + cw / 2, cy0 + ch * 0.55, cw * 0.85, ch * 0.6, d, { accent: '#2fe07a' });
@@ -1080,9 +1118,218 @@ window.DESIGNS = (() => {
     },
   });
 
+  // =============================================================== v2 designs
+  reg({
+    id: 'bavBlack12', name: "Bavaria Black Panel '12", era: '2010s', region: 'Euro', inspired: 'BMW F10 / F30 black-panel cluster', glass: true,
+    opts: [
+      { k: 'needle', label: 'Needle', type: 'color', def: '#ff4614' },
+      { k: 'accent', label: 'Screen accent', type: 'color', def: '#ff7a2a' },
+      { k: 'sport', label: 'Sport display (red tach)', type: 'bool', def: false },
+    ],
+    mfd: (o) => ({ x: 640, y: 140, w: 320, h: 330, theme: { bg: 'rgba(10,12,16,.96)', accent: o.accent || '#ff7a2a', font: 'Rajdhani' } }),
+    draw(c, d, k) {
+      const o = k.o;
+      c.fillStyle = '#000'; c.fillRect(0, 0, 1600, 600);
+      const ring = (x, y, r) => {
+        const g = c.createLinearGradient(x, y - r, x, y + r);
+        g.addColorStop(0, '#9aa0a8'); g.addColorStop(0.5, '#2a2d33'); g.addColorStop(1, '#7c828a');
+        c.beginPath(); c.arc(x, y, r + 7, 0, TAU); c.arc(x, y, r, 0, TAU, true); c.fillStyle = g; c.fill();
+        c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#0c0d10'); c.fill();
+      };
+      const nd = (x, y, a, len) => needle(c, x, y, a, { len, color: o.needle, w: 7, style: 'bar', tail: len * 0.18, cap: 26, capColor: '#16181c', capRim: '#5a5f66' });
+      // speedometer
+      let x = 390, y = 300, r = 240;
+      ring(x, y, r);
+      const [smax, smaj, smin] = sScale([260, 20, 10], [160, 20, 5]);
+      let ang = dial(c, { x, y, r: r * 0.96, min: 0, max: smax, major: smaj, minor: smin, tickColor: '#f2f4f7', labelColor: '#f5f7fa', labelSize: r * 0.12, labelR: 0.75, font: 'Rajdhani', weight: 600, majorW: 4, minorW: 2, label: (v) => ((v / smaj) % 2 === 0 ? String(v) : null) });
+      if (d.cruise.on) {
+        const a = ang(U.speed(d.adas && d.adas.acc ? d.adas.accSet || d.cruise.target : d.cruise.target));
+        glow(c, '#ff8a2a', 10); c.fillStyle = '#ff8a2a';
+        c.save(); c.translate(x + Math.cos(a) * (r + 14), y + Math.sin(a) * (r + 14)); c.rotate(a);
+        c.beginPath(); c.moveTo(-10, 0); c.lineTo(8, -9); c.lineTo(8, 9); c.closePath(); c.fill(); c.restore(); noGlow(c);
+      }
+      text(c, U.speedLabel(), x, y - r * 0.32, 18, '#8a9099', 'center', 'Rajdhani', 600);
+      mini(c, x, y + r * 0.62, 58, fuelFrac(d), { a0: 1.22 * PI, a1: 1.78 * PI, tick: '#f2f4f7', needle: o.needle, redStart: true, lo: '0', hi: '1/1', label: '#c8ccd2', size: 15, labelR: 1.22 });
+      icon(c, 'fuel', x, y + r * 0.66, 18, '#8a9099');
+      nd(x, y, ang(spd(d)), r * 0.9);
+      G.glass(c, x, y, r);
+      // tachometer
+      x = 1210;
+      ring(x, y, r);
+      ang = dial(c, { x, y, r: r * 0.96, min: 0, max: kmax(d), major: 1, minor: 0.5, tickColor: o.sport ? '#ff5a3a' : '#f2f4f7', labelColor: o.sport ? '#ff6a4a' : '#f5f7fa', labelSize: r * 0.15, labelR: 0.74, font: 'Rajdhani', weight: 600, majorW: 4, minorW: 2, red: { from: d.redFrom / 1000, r: 0.93, w: 0.06, color: '#d8230f' } });
+      text(c, '1/min x1000', x, y - r * 0.32, 16, '#8a9099', 'center', 'Rajdhani', 600);
+      mini(c, x, y + r * 0.62, 58, clamp((d.oilT - 70) / 80, 0, 1), { a0: 1.22 * PI, a1: 1.78 * PI, tick: '#f2f4f7', needle: o.needle, redEnd: true, lo: mph() ? '160' : '70', hi: mph() ? '300' : '150', label: '#c8ccd2', size: 14, labelR: 1.22 });
+      icon(c, 'oil', x, y + r * 0.66, 18, '#8a9099');
+      nd(x, y, ang(d.rpm / 1000), r * 0.9);
+      G.glass(c, x, y, r);
+      // centre: gear + odometer under the screen, tell-tales above
+      lightRow(c, d, 800, 60, 30, 6, { list: ['sigL', 'high', 'park', 'abs', 'esc', 'check', 'oil', 'sigR'] });
+      text(c, d.gear, 710, 520, 46, '#fff', 'center', 'Rajdhani', 700);
+      text(c, `${odoStr(d)} ${U.distLabel()}`, 860, 512, 20, '#c8ccd2', 'center', 'Rajdhani', 600);
+      text(c, BD.clock(d.tod), 860, 536, 18, '#8a9099', 'center', 'Rajdhani', 600);
+    },
+  });
+
+  reg({
+    id: 'stuttgart19', name: "Stuttgart Five-Dial '19", era: '2010s', region: 'Euro', inspired: 'Porsche 911 (992): analog tach between two screens', glass: true,
+    opts: [
+      { k: 'needle', label: 'Needle', type: 'color', def: '#e8231a' },
+      { k: 'accent', label: 'Screen accent', type: 'color', def: '#e8231a' },
+      { k: 'left', label: 'Left screen', type: 'select', options: ['speed + boost', 'off'], def: 'speed + boost' },
+    ],
+    mfd: (o) => ({ x: 1090, y: 70, w: 440, h: 460, theme: { bg: 'rgba(0,0,0,0)', accent: o.accent || '#e8231a', font: 'Barlow Condensed' } }),
+    draw(c, d, k) {
+      const o = k.o, a = accent(k, '#e8231a');
+      c.fillStyle = '#050505'; c.fillRect(0, 0, 1600, 600);
+      const screen = (x, y, w, h) => {
+        c.fillStyle = '#0b0c0e'; rrect(c, x, y, w, h, 26); c.fill();
+        c.strokeStyle = '#26282c'; c.lineWidth = 3; c.stroke();
+      };
+      screen(70, 60, 460, 480); screen(1070, 60, 460, 480);
+      // left screen: virtual speedometer + boost dial
+      if (o.left !== 'pages') {
+        const vdial = (x, y, r, max, val, maj, mi, lbl, title, red) => {
+          c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = '#000'; c.fill();
+          c.lineWidth = 2; c.strokeStyle = '#3a3c40'; c.stroke();
+          const an = dial(c, { x, y, r: r * 0.95, min: 0, max, major: maj, minor: mi, tickColor: '#e8e8e8', labelColor: '#f0f0f0', labelSize: r * 0.15, labelR: 0.7, font: 'Barlow Condensed', weight: 600, label: lbl, red });
+          text(c, title, x, y + r * 0.42, r * 0.11, '#9a9a9a', 'center', 'Barlow Condensed', 600);
+          needle(c, x, y, an(val), { len: r * 0.88, w: r * 0.035, color: o.needle, cap: r * 0.1, capColor: '#111' });
+        };
+        const [smax, smaj] = sScale([300, 20, 10], [190, 20, 5]);
+        vdial(220, 300, 135, smax, spd(d), smaj * 2, smaj, (v) => String(v), U.speedLabel());
+        const bmax = BD.settings.pressUnit === 'psi' ? 25 : BD.settings.pressUnit === 'kpa' ? 175 : 1.75;
+        vdial(430, 330, 85, bmax, Math.max(0, U.boost(d.boost)), bmax / 5, bmax / 25, (v) => (bmax < 5 ? v.toFixed(1) : String(Math.round(v))), `BOOST ${U.pressLabel()}`);
+        text(c, `${odoStr(d)} ${U.distLabel()}`, 300, 500, 20, '#9a9a9a', 'center', 'Barlow Condensed', 600);
+        text(c, `${Math.round(tempC(d))}${U.tempLabel()} WATER   ${Math.round(d.fuel * 100)}% FUEL`, 300, 100, 20, '#cfcfcf', 'center', 'Barlow Condensed', 600);
+      }
+      // centre: big analog tachometer
+      const x = 800, y = 300, r = 270;
+      const g = c.createLinearGradient(x, y - r, x, y + r); g.addColorStop(0, '#d8d8d8'); g.addColorStop(0.5, '#4a4a4a'); g.addColorStop(1, '#b8b8b8');
+      c.beginPath(); c.arc(x, y, r + 10, 0, TAU); c.fillStyle = g; c.fill();
+      c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#121212'); c.fill();
+      const ang = dial(c, { x, y, r: r * 0.96, min: 0, max: kmax(d), major: 1, minor: 0.2, mid: 0.5, a0: 0.75 * PI, a1: 2.25 * PI, tickColor: '#f4f4f4', labelColor: '#f4f4f4', labelSize: r * 0.17, labelR: 0.7, font: 'Barlow Condensed', weight: 600, majorW: 5, minorW: 2, red: { from: d.redFrom / 1000, r: 0.92, w: 0.07, color: '#e8231a' } });
+      text(c, '1/min x1000', x, y - r * 0.3, 18, '#9a9a9a', 'center', 'Barlow Condensed', 600);
+      text(c, Math.round(spd(d)), x, y + r * 0.36, 64, '#fff', 'center', 'Barlow Condensed', 600);
+      text(c, U.speedLabel(), x, y + r * 0.53, 18, '#9a9a9a', 'center', 'Barlow Condensed', 600);
+      c.fillStyle = '#000'; rrect(c, x + r * 0.28, y - 26, 64, 52, 8); c.fill();
+      text(c, gearMain(d), x + r * 0.28 + 32, y + 2, 40, a, 'center', 'Barlow Condensed', 700);
+      needle(c, x, y, ang(d.rpm / 1000), { len: r * 0.92, w: 9, style: 'classic', tail: r * 0.2, color: o.needle, cap: 34, capColor: '#151515', capRim: '#555' });
+      G.glass(c, x, y, r);
+      lightRow(c, d, 800, 575, 26, 8, { list: ['sigL', 'high', 'park', 'abs', 'esc', 'check', 'oil', 'battery', 'cruise', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'skyline99', name: "Neo Skyline '99", era: '1990s', region: 'Japan', inspired: 'Nissan Skyline GT-R (R34) with centre multi-function display', glass: true,
+    opts: [
+      { k: 'needle', label: 'Needle', type: 'color', def: '#ff2a1a' },
+      { k: 'mfdColor', label: 'MFD highlight', type: 'color', def: '#ffd200' },
+    ],
+    mfd: (o) => ({ x: 1140, y: 70, w: 420, h: 460, theme: { bg: '#071126', fg: '#e8f4ff', dim: '#6f9bd1', accent: o.mfdColor || '#ffd200', font: 'Orbitron', line: 'rgba(111,155,209,.25)', mapTheme: 'night' } }),
+    draw(c, d, k) {
+      const o = k.o;
+      const bg = c.createLinearGradient(0, 0, 0, 600); bg.addColorStop(0, '#15181d'); bg.addColorStop(1, '#07080a');
+      c.fillStyle = bg; c.fillRect(0, 0, 1600, 600);
+      // MFD bezel (the screen itself is drawn by the multi-function display)
+      c.fillStyle = '#000'; rrect(c, 1126, 56, 448, 488, 18); c.fill();
+      c.strokeStyle = '#2b3442'; c.lineWidth = 3; c.stroke();
+      text(c, 'MULTI FUNCTION DISPLAY', 1350, 562, 13, '#6f9bd1', 'center', 'Orbitron', 500);
+      const pod = (x, y, r) => {
+        c.beginPath(); c.arc(x, y, r + 12, 0, TAU); c.fillStyle = '#000'; c.fill();
+        c.beginPath(); c.arc(x, y, r + 4, 0, TAU); c.fillStyle = '#2a2d33'; c.fill();
+        c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#101114'); c.fill();
+      };
+      const nd = (x, y, a, len) => needle(c, x, y, a, { len, color: o.needle, w: len * 0.03, tail: len * 0.18, glow: o.needle, glowBlur: 6, cap: len * 0.11, capColor: '#0d0d0d', capRim: '#3a3a3a' });
+      // speedometer
+      let x = 280, y = 330, r = 190;
+      pod(x, y, r);
+      const [smax, smaj, smin] = sScale([180, 20, 10], [120, 20, 5]);
+      let ang = dial(c, { x, y, r: r * 0.95, min: 0, max: smax, major: smaj, minor: smin, tickColor: '#f2f2f2', labelColor: '#f2f2f2', labelSize: r * 0.14, labelR: 0.72, font: 'Rajdhani', weight: 700 });
+      text(c, U.speedLabel(), x, y - r * 0.32, 16, '#aaa', 'center', 'Rajdhani', 600);
+      text(c, odoStr(d), x, y + r * 0.42, 22, '#d8d8d8', 'center', 'Orbitron', 500);
+      nd(x, y, ang(spd(d)), r * 0.88);
+      G.glass(c, x, y, r);
+      // tachometer, centre
+      x = 710; y = 300; r = 250;
+      pod(x, y, r);
+      ang = dial(c, { x, y, r: r * 0.95, min: 0, max: Math.max(10, kmax(d)), major: 1, minor: 0.2, mid: 0.5, tickColor: '#f2f2f2', labelColor: '#f2f2f2', labelSize: r * 0.15, labelR: 0.7, font: 'Rajdhani', weight: 700, red: { from: d.redFrom / 1000, r: 0.88, w: 0.09, color: '#d6141a' } });
+      text(c, 'x1000r/min', x, y - r * 0.3, 18, '#aaa', 'center', 'Rajdhani', 600);
+      text(c, gearMain(d), x, y + r * 0.4, 46, '#ffd200', 'center', 'Orbitron', 700);
+      nd(x, y, ang(d.rpm / 1000), r * 0.9);
+      G.glass(c, x, y, r);
+      // boost
+      x = 1030; y = 455; r = 82;
+      pod(x, y, r);
+      const bar2 = BD.settings.pressUnit !== 'psi';
+      ang = dial(c, { x, y, r: r * 0.93, min: bar2 ? -1 : -15, max: bar2 ? 1.5 : 22, major: bar2 ? 0.5 : 5, minor: bar2 ? 0.1 : 1, tickColor: '#f2f2f2', labelColor: '#f2f2f2', labelSize: r * 0.2, labelR: 0.66, font: 'Rajdhani', weight: 700, label: (v) => (bar2 ? v.toFixed(1) : String(v)) });
+      text(c, 'BOOST', x, y + r * 0.42, 12, '#aaa', 'center', 'Rajdhani', 700);
+      nd(x, y, ang(BD.settings.pressUnit === 'kpa' ? U.boost(d.boost) / 100 : U.boost(d.boost)), r * 0.86);
+      // fuel + temp bars under the speedometer
+      text(c, 'FUEL', 130, 560, 14, '#aaa', 'left', 'Rajdhani', 700);
+      segments(c, 175, 552, 140, 16, 10, fuelFrac(d), (f) => (f < 0.15 ? '#ffb000' : '#f2f2f2'), '#222', 0.25);
+      text(c, 'TEMP', 330, 560, 14, '#aaa', 'left', 'Rajdhani', 700);
+      segments(c, 375, 552, 100, 16, 8, waterFrac(d), (f) => (f > 0.8 ? '#ff2a1a' : '#f2f2f2'), '#222', 0.25);
+      lightRow(c, d, 710, 30, 26, 6, { list: ['sigL', 'high', 'park', 'abs', 'check', 'oil', 'battery', 'sigR'] });
+    },
+  });
+
+  reg({
+    id: 'truck19', name: "Heartland Pickup '19", era: '2010s', region: 'US', inspired: 'American full-size pickup (Ford / GM trucks)', glass: true,
+    opts: [
+      { k: 'numbers', label: 'Numerals', type: 'color', def: '#dfe9ff' },
+      { k: 'needle', label: 'Needle', type: 'color', def: '#ff3b1f' },
+      { k: 'accent', label: 'Screen accent', type: 'color', def: '#3f9bff' },
+    ],
+    mfd: (o) => ({ x: 652, y: 92, w: 296, h: 396, theme: { bg: 'rgba(6,10,16,.96)', accent: o.accent || '#3f9bff', font: 'Rajdhani' } }),
+    draw(c, d, k) {
+      const o = k.o, num = o.numbers;
+      c.fillStyle = '#0d0f12'; c.fillRect(0, 0, 1600, 600);
+      // textured dash panel
+      c.strokeStyle = 'rgba(255,255,255,.025)'; c.lineWidth = 2;
+      for (let i = -600; i < 1600; i += 10) { c.beginPath(); c.moveTo(i, 0); c.lineTo(i + 600, 600); c.stroke(); }
+      const pod = (x, y, r, w = 10) => {
+        c.beginPath(); c.arc(x, y, r + w + 8, 0, TAU); c.fillStyle = 'rgba(0,0,0,.6)'; c.fill();
+        chrome(c, x, y, r, w);
+        c.beginPath(); c.arc(x, y, r, 0, TAU); c.fillStyle = deepFace(c, x, y, r, '#1b1e23'); c.fill();
+      };
+      const nd = (x, y, a, len) => needle(c, x, y, a, { len, color: o.needle, w: len * 0.035, tail: len * 0.18, cap: len * 0.11, capColor: '#16181c', capRim: '#777' });
+      const small = (x, y, frac, lo, hi, name, ic, warnEnd) => {
+        pod(x, y, 66, 6);
+        mini(c, x, y + 12, 52, frac, { lo, hi, tick: num, label: num, needle: o.needle, size: 13, font: 'Rajdhani', [warnEnd ? 'redEnd' : 'redStart']: true, labelR: 1.12 });
+        icon(c, ic, x, y + 34, 18, '#8fa0b8');
+        text(c, name, x, y - 38, 11, '#8fa0b8', 'center', 'Rajdhani', 700);
+      };
+      small(110, 175, fuelFrac(d), 'E', 'F', 'FUEL', 'fuel', false);
+      small(110, 415, waterFrac(d), 'C', 'H', 'ENGINE', 'temp', true);
+      small(1490, 175, oilP(d) / 80, '0', '80', 'OIL PSI', 'oil', false);
+      small(1490, 415, (volts(d) - 8) / 10, '8', '18', 'VOLTS', 'battery', false);
+      // speedometer
+      let x = 410, y = 300, r = 215;
+      pod(x, y, r);
+      const [smax, smaj, smin] = sScale([200, 20, 10], [120, 10, 5]);
+      let ang = dial(c, { x, y, r: r * 0.95, min: 0, max: smax, major: smaj, minor: smin, tickColor: num, labelColor: num, labelSize: r * 0.13, labelR: 0.72, font: 'Rajdhani', weight: 700, majorW: 4, minorW: 2, label: (v) => (mph() || (v / smaj) % 2 === 0 ? String(v) : null) });
+      text(c, mph() ? 'MPH' : 'KM/H', x, y - r * 0.32, 16, '#8fa0b8', 'center', 'Rajdhani', 700);
+      text(c, `${odoStr(d)}`, x, y + r * 0.42, 20, num, 'center', 'Rajdhani', 600);
+      nd(x, y, ang(spd(d)), r * 0.88);
+      G.glass(c, x, y, r);
+      // tachometer
+      x = 1190;
+      pod(x, y, r);
+      ang = dial(c, { x, y, r: r * 0.95, min: 0, max: kmax(d), major: 1, minor: 0.25, tickColor: num, labelColor: num, labelSize: r * 0.15, labelR: 0.7, font: 'Rajdhani', weight: 700, majorW: 4, minorW: 2, red: { from: d.redFrom / 1000, r: 0.9, w: 0.08, color: '#d6231a' } });
+      text(c, 'RPM x1000', x, y - r * 0.32, 16, '#8fa0b8', 'center', 'Rajdhani', 700);
+      nd(x, y, ang(d.rpm / 1000), r * 0.88);
+      G.glass(c, x, y, r);
+      // centre screen bezel + gear selector
+      c.fillStyle = '#000'; rrect(c, 640, 80, 320, 420, 16); c.fill();
+      c.strokeStyle = '#3a4048'; c.lineWidth = 3; c.stroke();
+      gearRow(c, d, 800, 540, 34, '#fff', 'rgba(255,255,255,.18)', ['P', 'R', 'N', 'D', 'L'], 'Rajdhani');
+      lightRow(c, d, 800, 40, 28, 6, { list: ['sigL', 'high', 'park', 'abs', 'esc', 'check', 'oil', 'battery', 'cruise', 'sigR'] });
+    },
+  });
+
   // =============================================================== custom
   reg({
-    id: 'race', name: 'Motorsport Pro', era: 'Custom', region: 'Custom', inspired: 'Race-car data displays',
+    id: 'race', mfdTheme: { bg: 'rgba(0,0,0,.96)', accent: '#00e5ff', font: 'Orbitron' }, name: 'Motorsport Pro', era: 'Custom', region: 'Custom', inspired: 'Race-car data displays',
     opts: [
       { k: 'accent', label: 'Accent', type: 'color', def: '#00e5ff' },
       { k: 'lights', label: 'Shift lights', type: 'select', options: ['gt', 'f1'], def: 'gt' },
@@ -1147,7 +1394,7 @@ window.DESIGNS = (() => {
     opts: [
       { k: 'layout', label: 'Layout', type: 'select', options: ['twin', 'triple', 'single'], def: 'twin' },
       { k: 'style', label: 'Dial style', type: 'select', options: ['classic', 'ring', 'digital'], def: 'ring' },
-      { k: 'center', label: 'Centre widget', type: 'select', options: ['info', 'map', 'adas', 'surround', 'gforce', 'tires', 'none'], def: 'info' },
+      { k: 'center', label: 'Centre widget', type: 'select', options: ['pages', 'info', 'map', 'adas', 'surround', 'gforce', 'tires', 'none'], def: 'pages' },
       { k: 'font', label: 'Font', type: 'select', options: ['Rajdhani', 'Barlow Condensed', 'Orbitron', 'Bebas Neue'], def: 'Rajdhani' },
       { k: 'bg', label: 'Background', type: 'color', def: '#05070a' },
       { k: 'face', label: 'Dial face', type: 'color', def: '#0d1016' },
@@ -1155,6 +1402,11 @@ window.DESIGNS = (() => {
       { k: 'accent', label: 'Accent', type: 'color', def: '#ff8a00' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff3a1a' },
     ],
+    mfd: (o) => {
+      if (o.center !== 'pages') return null;
+      const r = o.layout === 'single' ? [900, 60, 640, 480] : o.layout === 'triple' ? [1100, 120, 460, 400] : [610, 80, 380, 430];
+      return { x: r[0], y: r[1], w: r[2], h: r[3], theme: { accent: o.accent, fg: o.numbers, font: o.font, bg: 'rgba(255,255,255,.04)' } };
+    },
     draw(c, d, k) {
       const o = k.o, a = o.accent, F = o.font;
       c.fillStyle = o.bg; c.fillRect(0, 0, 1600, 600);
@@ -1183,7 +1435,7 @@ window.DESIGNS = (() => {
       };
       const centre = (x0, y0, w, h) => {
         const v = o.center;
-        if (v === 'none') return;
+        if (v === 'none' || v === 'pages') return;
         if (v === 'map') { MapView.mini(c, d, x0, y0, w, h, { zoom: 1.2, clipRound: 20 }); navCard(c, d, x0 + 10, y0 + 10, w - 20, 64, { accent: a }); }
         else if (v === 'adas') { G.adasView(c, x0 + w / 2, y0 + h * 0.55, w * 0.85, h * 0.7, d, { accent: a }); setSpeedChip(c, d, x0 + 30, y0 + 30, 30, a, F); limit(c, d, x0 + w - 40, y0 + 40, 28); }
         else if (v === 'surround') surround(c, d, x0, y0, w, h, { accent: a });

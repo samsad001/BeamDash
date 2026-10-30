@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#07090d">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/icon.svg">
+  <title>BeamDash Macros</title>
+  <link rel="stylesheet" href="/css/app.css">
+  <style>
+    code, .url { font-family: ui-monospace, "Cascadia Mono", Menlo, monospace; font-size: 12.5px; }
+    .url { color: #9fd0ff; word-break: break-all; }
+    table.macros { width: 100%; border-collapse: collapse; font-size: 14px; }
+    table.macros td, table.macros th { padding: 7px 8px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+    table.macros th { color: var(--dim); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; }
+    .kbd { display: inline-block; min-width: 34px; text-align: center; padding: 3px 8px; border: 1px solid #3a4456; border-bottom-width: 3px; border-radius: 7px; background: var(--panel2); font-family: ui-monospace, monospace; font-size: 12px; }
+    .listening { border-color: var(--warn) !important; color: var(--warn); }
+    pre { background: #05070a; border: 1px solid var(--line); border-radius: 10px; padding: 10px; overflow-x: auto; font-size: 12.5px; margin: 8px 0 0; }
+    .howto p { margin: 6px 0; font-size: 14px; color: #c7cfdb; }
+    @media (max-width: 700px) { .hide-sm { display: none; } }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="grid howto">
+      <div class="card"><h3>Second phone as a button pad</h3>
+        <p>Open <a href="/deck" id="deckLink">/deck</a> on any phone or tablet. It's a Stream Deck–style pad with live lights (blinkers flash, cruise shows the set speed). Tap <b>Edit</b> to change buttons; the layout is saved on the server, so every device shares it.</p>
+        <p>iPhone: Share → <b>Add to Home Screen</b> to open it full-screen.</p></div>
+      <div class="card"><h3>Stream Deck / Companion / Touch Portal</h3>
+        <p>Every action below has a URL. Any tool that can send an HTTP request can press it:</p>
+        <p><b>Elgato Stream Deck</b>: install the free <i>API Ninja</i> or <i>Web Requests</i> plugin, add a button, paste the URL (GET).</p>
+        <p><b>Linux (StreamController)</b>: add a <i>Run command</i> action with <code>curl -s URL</code>.</p>
+        <p><b>Bitfocus Companion / Touch Portal</b>: "HTTP GET" action with the URL.</p></div>
+      <div class="card"><h3>Keyboard shortcuts while gaming (KDE)</h3>
+        <p>System Settings → Keyboard → Shortcuts → <b>Add New → Command or Script</b>. Command:</p>
+        <pre id="kdeExample"></pre>
+        <p>Then assign any key (e.g. a spare F-key or macro key). KDE runs it even while BeamNG has focus.</p></div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <h3>Actions <span class="pill" id="count"></span>
+        <span style="margin-left:auto;display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-weight:500">
+          <span class="muted" style="font-size:13px">Cruise step</span>
+          <select id="step" style="width:auto;min-height:32px;padding:4px 8px"><option>1</option><option>2</option><option>5</option><option>10</option></select>
+          <button class="btn small" id="resetKeys">Reset keys</button>
+        </span>
+      </h3>
+      <p class="muted" style="font-size:13px;margin-top:0">Key = keyboard shortcut on any BeamDash page that has focus (click it, then press a key; Esc clears). URLs work from anywhere on your network.</p>
+      <div style="overflow-x:auto"><table class="macros" id="table"></table></div>
+    </div>
+  </main>
+  <script src="/js/client.js"></script>
+  <script src="/js/macros.js"></script>
+</body>
+</html>

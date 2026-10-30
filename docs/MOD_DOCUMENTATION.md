@@ -1,11 +1,11 @@
-# BeamDash mod documentation (alpha 0.01)
+# BeamDash mod documentation (alpha 0.02)
 
 > What changed in each release: [`CHANGELOG.md`](../CHANGELOG.md).
 
 BeamDash has two parts:
 
 1. **The BeamNG mod** (`BeamDash-mod.zip`): a small Lua bridge that runs inside the game. It reads live data from your car and the world, sends it out over your local network, and carries out commands (cruise, lights, tuning, navigation…).
-2. **The BeamDash server** (`server/`, Node.js): receives that data and serves the web app (Cluster, Telemetry, Map & Nav, Garage) to your phones, tablets and PCs.
+2. **The BeamDash server** (`server/`, Node.js): receives that data and serves the web app (cluster, telemetry, map, garage, deck, macros) to your phones, tablets and PCs.
 
 You need both. The mod does nothing on its own, and the server only shows a demo car without the mod.
 
@@ -39,7 +39,7 @@ mods/unpacked/beamdash_bridge/
 └── scripts/beamDash/modScript.lua
 ```
 
-> ⚠ Don't zip or unpack the whole BeamDash project folder into `mods`. If `scripts/` ends up one or more folders deeper, BeamNG lists the mod as active but never runs it. (This is exactly what happened during the first live test of this build.)
+> ⚠ Don't zip or unpack the whole BeamDash project folder into `mods`. If `scripts/` ends up one or more folders deeper, BeamNG lists the mod as active but never runs it.
 
 ### Check that it's running
 - The mod creates `settings/beamDash.json` in your BeamNG user folder the first time it starts.
@@ -90,8 +90,6 @@ Created by the mod with defaults. Edit it with the game closed.
 | `--outgauge-port` | 4444 | UDP port for OutGauge |
 | `--demo` | auto | `auto` = demo car when no game data, `on`, `off` |
 
-**Start at boot (Linux):** `beamdash.service` is a *system* unit in this build. Edit `User=` and the paths, then `sudo cp beamdash.service /etc/systemd/system/ && sudo systemctl enable --now beamdash`.
-
 ---
 
 ## 3. What the mod sends
@@ -116,11 +114,11 @@ Only the car you're driving streams vehicle data. Traffic and parked cars stay q
 
 ## 4. What the mod can do (commands)
 
-Sent from the web app: the cluster's **Drive Assist** panel (`A`) and the **Garage** page.
+Sent from the web app, the Deck, or a macro URL.
 
 | Area | Commands |
 |---|---|
-| Lights & signals | lights off / low / high, high beam, fog, left / right signal, hazard, horn |
+| Lights & signals | lights off / low / high, high beam, fog, left / right signal, hazard, horn (hold) |
 | Cruise | on / set (hold current speed), set speed, ± step, resume, off |
 | Adaptive cruise | on (at current speed), set speed, following distance 1–4, off |
 | Assist settings | collision warning (on/off, Late / Normal / Early), emergency braking, blind spot, speed-limit signs |
@@ -132,7 +130,7 @@ Sent from the web app: the cluster's **Drive Assist** panel (`A`) and the **Gara
 
 If a car lacks a feature (e.g. no drive modes), the command fails safely and the app shows a short message.
 
-> **Known issue in this build:** cruise control (and so adaptive cruise) does nothing in-game. The mod looks for a `cruiseControl` *controller*, but BeamNG provides cruise as a vehicle *extension*. A fix is planned for the next release.
+> **Known issue in this build:** cruise control (and so adaptive cruise) does nothing in-game. The mod looks for a `cruiseControl` *controller*, but BeamNG provides cruise as a vehicle *extension*. A fix is planned for the next release. The mod is the same as in alpha 0.01.
 
 ---
 
@@ -149,13 +147,13 @@ The assists run in the mod, using the positions of all vehicles in the world.
 | **Blind spot** | Cars 1.5–5.5 m to the side, from 13 m behind to 2.5 m ahead |
 | **Speed-limit signs** | Speed limit of the nearest road segment in the level's navigation data (only on maps that have limits) |
 
-These are game features. They act on the AI and player cars the game knows about, and they're tuned for fun, not realism. In this build the assist settings live in the game session only; they reset when BeamNG restarts.
+These are game features. They act on the AI and player cars the game knows about, and they're tuned for fun, not realism.
 
 ---
 
 ## 6. Using it without the mod (OutGauge)
 
-In BeamNG: Options → Other → **OutGauge**. Turn it on with IP = the server's IP (127.0.0.1 on the same PC) and port 4444. The cluster then works with basic data: speed, rpm, gear, pedals, temperatures, fuel, boost and a few lights. Tires, map, ADAS and all car control need the mod.
+In BeamNG: Options → Other → **OutGauge**. Turn it on with IP = the server's IP (127.0.0.1 on the same PC) and port 4444. The cluster then works with basic data: speed, rpm, gear, pedals, temperatures, fuel, boost and a few lights. Tires, map, ADAS, trip fuel and all car control need the mod.
 
 ---
 

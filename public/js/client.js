@@ -4,6 +4,7 @@ window.BD = (() => {
   const st = {
     e: {}, wheels: [], pt: null, energy: null, spec: null, info: null, vars: null, world: null, status: null,
     g: [0, 0, 9.81], pos: null, vel: null, dir: null, last: 0, damage: 0, connected: false,
+    media: null, mediaAt: 0, trips: null,
   };
   const listeners = {};
   const on = (type, fn) => ((listeners[type] = listeners[type] || []).push(fn), fn);
@@ -12,7 +13,7 @@ window.BD = (() => {
   // ---------------------------------------------------------------- settings
   const DEFAULTS = {
     speedUnit: 'kmh', tempUnit: 'C', pressUnit: 'psi', distUnit: 'km', design: 'bav86', designOpts: {},
-    sounds: true, assistChips: true, fps: 60, redline: 0, shiftRpm: 0, brightness: 1,
+    sounds: true, assistChips: true, fps: 60, redline: 0, shiftRpm: 0, brightness: 1, wheelButtons: true, cruiseStep: 5,
     adas: { fcw: true, fcwSens: 2, aeb: false, bsm: true, tsr: true, accGap: 2 },
   };
   let settings;
@@ -170,7 +171,7 @@ window.BD = (() => {
   }
   function connect() {
     es = new EventSource('/api/stream');
-    es.onopen = () => { st.connected = true; fire('connection', true); pushAdas(); };
+    es.onopen = () => { st.connected = true; fire('connection', true); };
     es.onerror = () => { st.connected = false; fire('connection', false); };
     handle('veh', (m) => {
       Object.assign(st.e, m.e);
@@ -185,7 +186,15 @@ window.BD = (() => {
     handle('spec', (m) => { st.spec = m; });
     handle('info', (m) => { st.info = m; cons.samples = []; cons.lastOdo = null; cons.value = 0; });
     handle('vars', (m) => { st.vars = m; });
-    handle('world', (m) => { st.world = m; });
+    handle('world', (m) => {
+      st.world = m;
+      // the game is the source of truth for ADAS settings (they can change from macros / other phones)
+      if (m.adas) for (const k of ['fcw', 'fcwSens', 'aeb', 'bsm', 'tsr', 'accGap']) if (m.adas[k] !== undefined) settings.adas[k] = m.adas[k];
+    });
+    handle('media', (m) => { st.media = m; st.mediaAt = performance.now(); });
+    handle('trips', (m) => { st.trips = m; });
+    handle('ui', () => {});
+    handle('deck', () => {});
     handle('status', (m) => { st.status = m; });
     handle('mapver', () => {});
     handle('cmdResult', (m) => { if (!m.ok && m.err) toast(`${m.type}: ${m.err}`, true); });
@@ -201,7 +210,55 @@ window.BD = (() => {
     }
   }
   function pushAdas() { cmd('adas', { settings: settings.adas }); }
-  function setAdas(patch) { Object.assign(settings.adas, patch); save(); pushAdas(); }
+  function setAdas(patch) { Object.assign(settings.adas, patch); save(); cmd('adas', { settings: patch }); }
+
+  // named actions (same ones macros / Stream Deck use)
+  async function action(id, params) {
+    const q = params ? '?' + new URLSearchParams(params) : '';
+    try {
+      const r = await fetch(`/api/action/${encodeURIComponent(id)}${q}`, { method: 'POST' });
+      const j = await r.json();
+      if (!j.ok && j.err) toast(j.err, true);
+      return j;
+    } catch {
+      toast('Server unreachable', true);
+      return { ok: false };
+    }
+  }
+  const unitParams = () => ({ step: settings.cruiseStep || 5, unit: settings.speedUnit });
+
+  // ---------------------------------------------------------------- key bindings (work on every BeamDash page)
+  const DEFAULT_KEYS = {
+    ArrowRight: 'cluster-next', ArrowLeft: 'cluster-prev', Enter: 'cluster-ok', Backspace: 'cluster-back',
+    PageDown: 'design-next', PageUp: 'design-prev', h: 'cluster-hide',
+  };
+  let keys;
+  try { keys = JSON.parse(localStorage.getItem('beamdash.keys') || 'null') || { ...DEFAULT_KEYS }; } catch { keys = { ...DEFAULT_KEYS }; }
+  const saveKeys = () => { try { localStorage.setItem('beamdash.keys', JSON.stringify(keys)); } catch { /* ignore */ } };
+  let keysPaused = false;
+  window.addEventListener('keydown', (e) => {
+    if (keysPaused || e.ctrlKey || e.metaKey || e.altKey) return;
+    const tag = e.target.tagName;
+    if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
+    const id = keys[e.key] || keys[e.code];
+    if (!id) return;
+    e.preventDefault();
+    action(id, id.startsWith('cruise-') ? unitParams() : undefined);
+  });
+
+  // ---------------------------------------------------------------- formatting
+  function duration(s) {
+    s = Math.max(0, Math.floor(s || 0));
+    const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+    return h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
+  }
+  // current media position, advanced locally between 1 Hz updates
+  function mediaNow() {
+    const m = st.media;
+    if (!m || !m.active) return m;
+    const pos = m.status === 'Playing' ? m.position + (performance.now() - st.mediaAt) / 1000 : m.position;
+    return { ...m, position: Math.min(m.length || pos, pos) };
+  }
 
   // ---------------------------------------------------------------- UI helpers
   let toastEl = null, toastTimer = 0;
@@ -219,7 +276,7 @@ window.BD = (() => {
   }
 
   function nav(active) {
-    const links = [['index', 'Cluster'], ['telemetry', 'Telemetry'], ['map', 'Map & Nav'], ['garage', 'Garage']];
+    const links = [['index', 'Cluster'], ['telemetry', 'Telemetry'], ['map', 'Map & Nav'], ['garage', 'Garage'], ['deck', 'Deck'], ['macros', 'Macros']];
     const el = document.createElement('nav');
     el.className = 'bd-nav';
     el.innerHTML = `<a class="brand" href="/">BeamDash</a>` +
@@ -239,5 +296,10 @@ window.BD = (() => {
 
   function fmt(v, d = 0) { return typeof v === 'number' && isFinite(v) ? v.toFixed(d) : '—'; }
 
-  return { st, on, fire, connect, cmd, data, settings, save, U, clock, navNext, toast, nav, fmt, setAdas, pushAdas, b };
+  return {
+    st, on, fire, connect, cmd, data, settings, save, U, clock, navNext, toast, nav, fmt, setAdas, pushAdas, b,
+    action, unitParams, duration, mediaNow, DEFAULT_KEYS,
+    get keys() { return keys; }, setKey(k, id) { if (id) keys[k] = id; else delete keys[k]; saveKeys(); },
+    resetKeys() { keys = { ...DEFAULT_KEYS }; saveKeys(); }, pauseKeys(v) { keysPaused = v; },
+  };
 })();

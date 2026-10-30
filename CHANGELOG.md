@@ -4,6 +4,37 @@ Each release lists the changes to the **mod** (the Lua files inside BeamNG) and 
 
 ---
 
+## alpha 0.02 (2026-10-30)
+
+**Mod: no changes** (same Lua as 0.01, so no reinstall needed).
+
+### Server
+- **New `actions.js`:** about 50 named actions, each with its own URL `/api/action/<id>` for Stream Deck, Companion, Touch Portal, curl or keyboard shortcuts. `/api/actions` lists them.
+  - Toggles (cruise, parking brake, ADAS settings, following distance 1→4) are worked out on the server from the current state, so one URL works as a toggle.
+  - Hold actions (horn) take `?state=up` to release. Cruise ± takes `step` and `unit` (km/h or mph).
+- **New `trips.js`, trip computer:** Trip A, Trip B, Since start and a resettable Economy counter (distance, drive time, engine time, average and max speed, fuel used, L/100 km). Saved to `data/trips.json` every 10 s. *Since start* resets when you spawn a different car. The demo car uses its own throw-away counters.
+- **New `media.js`, now playing:** reads `playerctl` once a second (title, artist, album, art, position) and sends play / pause / next / previous. `/api/media/art` serves only the current track's album art.
+- `server.js`
+  - New endpoints `/api/action/<id>`, `/api/actions`, `/api/deck` (GET / PUT, saved in `data/deck.json`) and `/api/media/art`.
+  - New live events: `trips`, `media`, `ui` (flip pages on every screen) and `deck`.
+  - ADAS settings are saved in `data/settings.json` and sent back to the game when it reconnects.
+- `beamdash.service` is now a systemd **user** unit, so the server can reach the desktop's media player.
+
+### Web app
+- **Info pages (multi-function display)**, flipped with ◀ OK ▶, swipes, keys, the Deck or macros: Trip, Economy, Now playing, Navigation, Driver assist, Digital speed, Tires, G-force, Engine, Vehicle & service. Hold OK to reset a trip.
+  - Shown on each design's own screen, in the check-control line on the E46-style design, or as a pop-up on classic designs.
+- **4 new designs (20 total):** Bavaria Black Panel '12, Stuttgart Five-Dial '19, Neo Skyline '99, Heartland Pickup '19.
+- Nicer gauges: needle shadows and caps, glass reflections, per-design page colours, and more polish on the existing designs.
+- **Deck page** (`/deck`): a button pad for a second phone, with editable pages.
+- **Macros page** (`/macros`): every action's URL, ready to copy, plus keyboard bindings.
+- Telemetry shows the trip computer.
+
+
+### Known issues
+- Cruise control does nothing in-game (a fix is planned for the next release).
+
+---
+
 ## alpha 0.01 (2026-10-30, first build)
 
 ### Mod (new)
