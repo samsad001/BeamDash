@@ -4,6 +4,23 @@ Each release lists the changes to the **mod** (the Lua files inside BeamNG) and 
 
 ---
 
+## alpha 0.04-2 (2026-10-30)
+
+A fix-up of alpha 0.04.
+
+**Mod: no changes** (same as 0.04). If you already installed the 0.04 mod, there's nothing to reinstall.
+
+### Server
+- `version.js`: version is "alpha 0.04-2" (top bar and `/api/state`). No other server changes.
+
+### Web app
+- `public/js/designs.js`: restored 18 lines that were accidentally left out of alpha 0.04 (alpha 0.02 and 0.03 have them):
+  - **Bavaria M '98** (E46 style): the check-control line shows the info page you flipped to again (trip, economy, nav…). Warnings still take priority. The page name shows underneath, and long text shrinks to fit.
+  - **Custom Builder:** the *Pages* centre option is back (and is the default again). The info pages draw in the centre slot of every layout.
+- `public/js/client.js`: version label "alpha 0.04-2".
+
+---
+
 ## alpha 0.04 (2026-10-30)
 
 The biggest update yet.

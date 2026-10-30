@@ -504,6 +504,8 @@ window.DESIGNS = (() => {
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff2414' },
       { k: 'warmup', label: 'Warm-up redline', type: 'bool', def: true },
     ],
+    mfd: () => ({ line: true }), // pages show in the check-control LCD
+    mfdTheme: { accent: '#ff7a2a', fg: '#ffd7b0', dim: 'rgba(255,170,110,.6)', font: 'Barlow Condensed', line: 'rgba(255,122,42,.2)' },
     draw(c, d, k) {
       const o = k.o, il = o.illum;
       c.fillStyle = '#030303'; c.fillRect(0, 0, 1600, 600);
@@ -551,11 +553,17 @@ window.DESIGNS = (() => {
       c.fillStyle = '#0a0703'; rrect(c, 580, 470, 440, 70, 8); c.fill();
       c.strokeStyle = '#2a1a08'; c.lineWidth = 2; c.stroke();
       const msgs = checkMessages(d);
-      const msg = msgs.length ? msgs[Math.floor(k.t / 3) % msgs.length] : `${BD.clock(d.tod)}    ${U.speed(d.speed) > 1 ? econ(d).toFixed(1) + ' L/100' : 'READY'}`;
-      // dot-matrix look: draw text then a dot mask
-      text(c, msg, 800, 506, 30, msgs.length ? '#ff9a3a' : il, 'center', 'Orbitron', 500);
+      // warnings first, otherwise the on-board computer page you flipped to (like the real check-control display)
+      const msg = msgs.length ? msgs[Math.floor(k.t / 3) % msgs.length] : MFD.line(d);
+      c.save();
+      c.beginPath(); c.rect(588, 474, 424, 62); c.clip();
+      const size = msg.length > 26 ? 21 : 27;
+      text(c, msg, 800, 506, size, msgs.length ? '#ff9a3a' : il, 'center', 'Orbitron', 500);
+      c.restore();
+      // dot-matrix look: horizontal mask lines over the text
       c.fillStyle = 'rgba(10,7,3,.55)';
       for (let yy = 476; yy < 540; yy += 4) c.fillRect(584, yy, 432, 1.4);
+      text(c, MFD.page.name.toUpperCase(), 800, 556, 13, 'rgba(255,122,42,.5)', 'center', 'Orbitron', 500);
     },
   });
 
@@ -1999,7 +2007,7 @@ window.DESIGNS = (() => {
     opts: [
       { k: 'layout', label: 'Layout', type: 'select', options: ['twin', 'triple', 'single'], def: 'twin' },
       { k: 'style', label: 'Dial style', type: 'select', options: ['classic', 'ring', 'digital'], def: 'ring' },
-      { k: 'center', label: 'Centre widget', type: 'select', options: ['info', 'map', 'adas', 'surround', 'gforce', 'tires', 'none'], def: 'info' },
+      { k: 'center', label: 'Centre widget', type: 'select', options: ['pages', 'info', 'map', 'adas', 'surround', 'gforce', 'tires', 'none'], def: 'pages' },
       { k: 'font', label: 'Font', type: 'select', options: ['Rajdhani', 'Barlow Condensed', 'Orbitron', 'Bebas Neue'], def: 'Rajdhani' },
       { k: 'bg', label: 'Background', type: 'color', def: '#05070a' },
       { k: 'face', label: 'Dial face', type: 'color', def: '#0d1016' },
@@ -2007,6 +2015,11 @@ window.DESIGNS = (() => {
       { k: 'accent', label: 'Accent', type: 'color', def: '#ff8a00' },
       { k: 'needle', label: 'Needle', type: 'color', def: '#ff3a1a' },
     ],
+    mfd: (o) => {
+      if (o.center !== 'pages') return null;
+      const r = o.layout === 'single' ? [900, 60, 640, 480] : o.layout === 'triple' ? [1100, 120, 460, 400] : [610, 80, 380, 430];
+      return { x: r[0], y: r[1], w: r[2], h: r[3], theme: { accent: o.accent, fg: o.numbers, font: o.font, bg: 'rgba(255,255,255,.04)' } };
+    },
     draw(c, d, k) {
       const o = k.o, a = o.accent, F = o.font;
       c.fillStyle = o.bg; c.fillRect(0, 0, 1600, 600);
@@ -2035,7 +2048,7 @@ window.DESIGNS = (() => {
       };
       const centre = (x0, y0, w, h) => {
         const v = o.center;
-        if (v === 'none') return;
+        if (v === 'none' || v === 'pages') return;
         if (v === 'map') { MapView.mini(c, d, x0, y0, w, h, { zoom: 1.2, clipRound: 20 }); navCard(c, d, x0 + 10, y0 + 10, w - 20, 64, { accent: a }); }
         else if (v === 'adas') { G.adasView(c, x0 + w / 2, y0 + h * 0.55, w * 0.85, h * 0.7, d, { accent: a }); setSpeedChip(c, d, x0 + 30, y0 + 30, 30, a, F); limit(c, d, x0 + w - 40, y0 + 40, 28); }
         else if (v === 'surround') surround(c, d, x0, y0, w, h, { accent: a });

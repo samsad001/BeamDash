@@ -1,4 +1,4 @@
-# BeamDash technical write-up (alpha 0.04)
+# BeamDash technical write-up (alpha 0.04-2)
 
 What changed technically in 0.04: three new server modules (`perf.js`, `fun.js`, `recorder.js`), power / battery / damage data and "watched" streaming in the mod, per-vehicle routing in the server and client, 6 new info pages, portrait rendering, an alerts module, and HUD / OBS / Records / Connect pages. See §14 for the algorithms. The rest of this document is updated throughout.
 

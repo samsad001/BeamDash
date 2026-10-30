@@ -3,7 +3,7 @@
 <p align="center"><b>Live gauge clusters, telemetry and car control for BeamNG.drive, on your phone, tablet or second screen.</b></p>
 
 <p align="center">
-  <a href="https://github.com/samsad001/BeamDash/releases"><img src="https://img.shields.io/badge/release-alpha%200.04-ff7a2a?style=for-the-badge" alt="Release alpha 0.04"></a>
+  <a href="https://github.com/samsad001/BeamDash/releases"><img src="https://img.shields.io/badge/release-alpha%200.04--2-ff7a2a?style=for-the-badge" alt="Release alpha 0.04-2"></a>
   <img src="https://img.shields.io/badge/BeamNG.drive-0.32%2B-2f80ff?style=for-the-badge" alt="BeamNG.drive 0.32+">
   <img src="https://img.shields.io/badge/Node.js-18%2B-3c873a?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js 18+">
   <img src="https://img.shields.io/badge/dependencies-0-8a95a8?style=for-the-badge" alt="Zero dependencies">
@@ -21,7 +21,7 @@
 </p>
 
 > [!NOTE]
-> **Alpha 0.04.** The mod changed in 0.04, so reinstall `BeamDash-mod.zip`. Everything was tested with the built-in demo car; the new in-game data (engine and motor power, battery, damage, watching other cars) and the reworked cruise control still need confirming in BeamNG across many cars. Missing data is shown as "not available" instead of breaking anything. Please [report](https://github.com/samsad001/BeamDash/issues) what works on your cars.
+> **Alpha 0.04-2.** The mod changed in 0.04, so reinstall `BeamDash-mod.zip`. Everything was tested with the built-in demo car; the new in-game data (engine and motor power, battery, damage, watching other cars) and the reworked cruise control still need confirming in BeamNG across many cars. Missing data is shown as "not available" instead of breaking anything. Please [report](https://github.com/samsad001/BeamDash/issues) what works on your cars.
 
 ## ✨ Features
 
@@ -58,7 +58,7 @@
 
 ## 🚀 Quick start
 
-1. **Download** `BeamDash-alpha-0.04.zip` from the [Releases page](https://github.com/samsad001/BeamDash/releases) and unzip it anywhere.
+1. **Download** `BeamDash-alpha-0.04-2.zip` from the [Releases page](https://github.com/samsad001/BeamDash/releases) and unzip it anywhere.
 2. **Install the mod:** put `BeamDash-mod.zip` in your BeamNG `mods` folder, or run `bash install-mod.sh` (Linux) / `install-mod.ps1` (Windows). Don't put the whole download in `mods`.
 3. **Start the server:** `bash start-server.sh` (Linux) or `start-server.bat` (Windows). You need [Node.js](https://nodejs.org) 18 or newer.
 4. **Open the address it prints** (e.g. `http://192.168.1.20:8080`) on your phone, iPad or PC, and spawn a car in BeamNG.

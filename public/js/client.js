@@ -6,7 +6,7 @@ window.BD = (() => {
     g: [0, 0, 9.81], pos: null, vel: null, dir: null, last: 0, damage: 0, connected: false,
     media: null, mediaAt: 0, trips: null, perf: null, perfAt: 0, fun: null, dmg: null,
   };
-  const VERSION = 'alpha 0.04';
+  const VERSION = 'alpha 0.04-2';
   const listeners = {};
   const on = (type, fn) => ((listeners[type] = listeners[type] || []).push(fn), fn);
   const fire = (type, data) => (listeners[type] || []).forEach((f) => { try { f(data); } catch (err) { console.error(err); } });

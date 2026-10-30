@@ -1,4 +1,4 @@
-# BeamDash alpha 0.04: mod page description
+# BeamDash alpha 0.04-2: mod page description
 
 Ready-to-paste text for the BeamNG.drive repository / forum: a plain version and a BBCode version (the forum uses BBCode).
 
@@ -8,7 +8,7 @@ Ready-to-paste text for the BeamNG.drive repository / forum: a plain version and
 
 ## Title
 
-**BeamDash: Live Gauge Clusters, Telemetry, Lap Timing & Car Control on Your Phone (alpha 0.04)**
+**BeamDash: Live Gauge Clusters, Telemetry, Lap Timing & Car Control on Your Phone (alpha 0.04-2)**
 
 ## Short description (one line)
 
@@ -84,7 +84,7 @@ Full guide: `docs/MOD_DOCUMENTATION.md` in the download.
 ## Full description (BBCode for the forum)
 
 ```bbcode
-[SIZE=6][B]BeamDash[/B] alpha 0.04 - Live Gauge Clusters, Telemetry, Lap Timing & Car Control on Your Phone[/SIZE]
+[SIZE=6][B]BeamDash[/B] alpha 0.04-2 - Live Gauge Clusters, Telemetry, Lap Timing & Car Control on Your Phone[/SIZE]
 
 Turn any [B]phone, tablet or second screen[/B] into a working instrument cluster for [B]every car[/B] - combustion, hybrid or electric.
 

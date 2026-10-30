@@ -1,4 +1,4 @@
-# BeamDash mod documentation (alpha 0.04)
+# BeamDash mod documentation (alpha 0.04-2)
 
 > **Upgrading from an earlier build?** The mod changed in alpha 0.04 (power / battery / damage data, watching other cars). Replace your installed copy with the new `BeamDash-mod.zip` (or copy the two `lua/…` files over an unpacked install) and restart BeamNG.
 
