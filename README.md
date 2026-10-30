@@ -36,7 +36,7 @@
 - 🛡️ **Drive assist**: cruise control, adaptive cruise with 4 following distances, forward collision warning, emergency braking, blind-spot monitor, speed-limit signs, ESC and drive modes.
 - 🔧 **Garage**: car specs, the car's tuning sliders, repair, refuel, engine start/stop, time of day, pause.
 - 📱 **Phone, iPad or desktop**, installable as an app. A built-in **demo car** lets you try everything without the game.
-- 🪶 **Tiny and self-contained**: a Node.js server with zero dependencies, no build step, OutGauge fallback without the mod.
+- 📦 **Tiny and self-contained**: a Node.js server with zero dependencies, no build step, OutGauge fallback without the mod.
 
 <p align="center"><img src="media/designs.png" alt="All 20 cluster designs" width="100%"></p>
 
